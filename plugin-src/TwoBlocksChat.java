@@ -147,6 +147,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private final Map<UUID, String> playerNplNames = new ConcurrentHashMap<>();
     private final Map<String, UUID> blockOwners = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastNplWarning = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> nplChatCooldownSeconds = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> nplLastChatTime = new ConcurrentHashMap<>();
     private final Map<UUID, Long> ttsCooldowns = new ConcurrentHashMap<>();
     private VoicechatHook voicechatHook = null;
 
@@ -1577,6 +1579,20 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 }
             }
 
+            nplChatCooldownSeconds.clear();
+            if (yaml.isConfigurationSection("chat_cooldowns")) {
+                ConfigurationSection ccSec = yaml.getConfigurationSection("chat_cooldowns");
+                for (String uuidStr : ccSec.getKeys(false)) {
+                    try {
+                        UUID u = UUID.fromString(uuidStr);
+                        long cd = ccSec.getLong(uuidStr);
+                        if (cd > 0) {
+                            nplChatCooldownSeconds.put(u, cd);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+
             blockOwners.clear();
             List<String> ownersList = yaml.getStringList("block_owners");
             for (String entry : ownersList) {
@@ -1627,6 +1643,10 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
             for (Map.Entry<UUID, String> ne : playerNplNames.entrySet()) {
                 yaml.set("player_names." + ne.getKey().toString(), ne.getValue());
+            }
+
+            for (Map.Entry<UUID, Long> cde : nplChatCooldownSeconds.entrySet()) {
+                yaml.set("chat_cooldowns." + cde.getKey().toString(), cde.getValue());
             }
 
             List<String> ownersList = new ArrayList<>();
@@ -2218,18 +2238,110 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                         + (newVal ? ChatColor.RED + "[ЗАПРЕЩЕНО]" : ChatColor.GREEN + "[РАЗРЕШЕНО]"));
 
                 sendPlayerNplSettingsMenu(sender, targetInfo, "");
+            } else if (action.equals("chat") || action.equals("чат") || action.equals("cooldown") || action.equals("кд")) {
+                if (args.length < 3) {
+                    Long currentCd = nplChatCooldownSeconds.get(targetInfo.uuid);
+                    if (currentCd == null || currentCd <= 0) {
+                        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.WHITE + "У игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.WHITE + " нет задержки на чат.");
+                    } else {
+                        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.WHITE + "Текущая задержка чата для " + ChatColor.GOLD + targetInfo.name + ChatColor.WHITE + ": "
+                                + ChatColor.YELLOW + formatDurationHuman(currentCd));
+                    }
+                    sender.sendMessage(ChatColor.GRAY + "Использование: /npl " + targetInfo.name + " chat <время/0> (например: 30s, 3m, 2h, 0 - снять)");
+                    return;
+                }
+
+                String timeStr = args[2].trim().toLowerCase();
+                long seconds = parseDurationSeconds(timeStr);
+                if (seconds < 0) {
+                    sender.sendMessage(ChatColor.RED + "Неверный формат времени: " + timeStr + ". Используйте секунды, минуты или часы (например: 30s, 3m, 1h, 0).");
+                    return;
+                }
+
+                if (seconds == 0) {
+                    nplChatCooldownSeconds.remove(targetInfo.uuid);
+                    nplLastChatTime.remove(targetInfo.uuid);
+                    saveNplDataAsync();
+                    sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.GREEN + "Задержка чата для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.GREEN + " полностью снята.");
+                } else {
+                    nplChatCooldownSeconds.put(targetInfo.uuid, seconds);
+                    playerNplNames.put(targetInfo.uuid, targetInfo.name);
+                    saveNplDataAsync();
+                    sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.WHITE + "Для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.WHITE + " установлена задержка сообщений: "
+                            + ChatColor.YELLOW + formatDurationHuman(seconds));
+                }
+                sendPlayerNplSettingsMenu(sender, targetInfo, "");
             } else if (action.equals("reset") || action.equals("сброс")) {
                 playerNplRules.remove(targetInfo.uuid);
+                nplChatCooldownSeconds.remove(targetInfo.uuid);
+                nplLastChatTime.remove(targetInfo.uuid);
                 saveNplDataAsync();
                 sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
-                        + ChatColor.GREEN + "Индивидуальные правила для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.GREEN + " сброшены к общим настройкам.");
+                        + ChatColor.GREEN + "Индивидуальные правила и задержка чата для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.GREEN + " сброшены.");
                 sendPlayerNplSettingsMenu(sender, targetInfo, "");
             } else {
-                sender.sendMessage(ChatColor.RED + "Неверный аргумент! Используйте: /npl " + targetInfo.name + " (on/off/toggle/reset)");
+                sender.sendMessage(ChatColor.RED + "Неверный аргумент! Используйте: /npl " + targetInfo.name + " (on/off/toggle/chat/reset)");
             }
         } catch (Throwable t) {
             sender.sendMessage(ChatColor.RED + "[NPL] Ошибка: " + t.getMessage());
         }
+    }
+
+    private static long parseDurationSeconds(String input) {
+        if (input == null || input.trim().isEmpty()) return -1;
+        String s = input.trim().toLowerCase();
+        if (s.equals("0") || s.equals("none") || s.equals("off") || s.equals("нет")) {
+            return 0;
+        }
+
+        try {
+            long totalSeconds = 0;
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+)([smhdчмс]?)");
+            java.util.regex.Matcher matcher = pattern.matcher(s);
+            boolean found = false;
+
+            while (matcher.find()) {
+                String numStr = matcher.group(1);
+                String unit = matcher.group(2);
+                if (numStr == null || numStr.isEmpty()) continue;
+                long val = Long.parseLong(numStr);
+                found = true;
+
+                if (unit == null || unit.isEmpty() || unit.equals("s") || unit.equals("с")) {
+                    totalSeconds += val;
+                } else if (unit.equals("m") || unit.equals("м")) {
+                    totalSeconds += val * 60L;
+                } else if (unit.equals("h") || unit.equals("ч")) {
+                    totalSeconds += val * 3600L;
+                } else if (unit.equals("d") || unit.equals("д")) {
+                    totalSeconds += val * 86400L;
+                }
+            }
+
+            if (found && totalSeconds >= 0) {
+                return totalSeconds;
+            }
+        } catch (Throwable ignored) {}
+        return -1;
+    }
+
+    private static String formatDurationHuman(long totalSeconds) {
+        if (totalSeconds <= 0) return "0 сек";
+        long d = totalSeconds / 86400L;
+        long h = (totalSeconds % 86400L) / 3600L;
+        long m = (totalSeconds % 3600L) / 60L;
+        long s = totalSeconds % 60L;
+
+        StringBuilder sb = new StringBuilder();
+        if (d > 0) sb.append(d).append(" дн. ");
+        if (h > 0) sb.append(h).append(" ч. ");
+        if (m > 0) sb.append(m).append(" мин. ");
+        if (s > 0 || sb.length() == 0) sb.append(s).append(" сек.");
+        return sb.toString().trim();
     }
 
     private static class UUIDAndName {
@@ -2368,6 +2480,33 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             sender.sendMessage("§7Режим ограничений: " + status + " §8(/npl " + target.name + " on/off)");
         }
 
+        Long cd = nplChatCooldownSeconds.get(target.uuid);
+        String cdDisplay = (cd != null && cd > 0) ? "§e" + formatDurationHuman(cd) : "§aНет";
+        if (sender instanceof Player) {
+            Player p = (Player) sender;
+            TextComponent chatLine = new TextComponent("§7Задержка чата: " + cdDisplay + " §8[ ");
+            TextComponent set30s = new TextComponent("§b[30s]");
+            set30s.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 30s"));
+            TextComponent set1m = new TextComponent("§b[1m]");
+            set1m.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 1m"));
+            TextComponent set5m = new TextComponent("§b[5m]");
+            set5m.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 5m"));
+            TextComponent clearCd = new TextComponent("§c[Снять]");
+            clearCd.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 0"));
+
+            chatLine.addExtra(set30s);
+            chatLine.addExtra(new TextComponent(" "));
+            chatLine.addExtra(set1m);
+            chatLine.addExtra(new TextComponent(" "));
+            chatLine.addExtra(set5m);
+            chatLine.addExtra(new TextComponent(" "));
+            chatLine.addExtra(clearCd);
+            chatLine.addExtra(new TextComponent(" §8]"));
+            p.spigot().sendMessage(chatLine);
+        } else {
+            sender.sendMessage("§7Задержка чата: " + cdDisplay + " §8(/npl " + target.name + " chat <время>)");
+        }
+
         sender.sendMessage(ChatColor.GRAY + "Нажмите на действие, чтобы запретить/разрешить для этого игрока:");
 
         boolean hasMatches = false;
@@ -2496,8 +2635,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private void sendNplHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] " + ChatColor.RED + "" + ChatColor.BOLD + "Команды управления:");
         sender.sendMessage(ChatColor.YELLOW + "/npl <ник>" + ChatColor.GRAY + " : Меню ограничений для конкретного игрока");
-        sender.sendMessage(ChatColor.YELLOW + "/npl <ник> on" + ChatColor.GRAY + " : Включить ограничения для игрока");
-        sender.sendMessage(ChatColor.YELLOW + "/npl <ник> off" + ChatColor.GRAY + " : Выключить ограничения для игрока");
+        sender.sendMessage(ChatColor.YELLOW + "/npl <ник> on/off" + ChatColor.GRAY + " : Включить/выключить ограничения");
+        sender.sendMessage(ChatColor.YELLOW + "/npl <ник> chat <время>" + ChatColor.GRAY + " : Установить задержку чата (30s, 3m, 1h, 0)");
         sender.sendMessage(ChatColor.YELLOW + "/npl settings" + ChatColor.GRAY + " : Общие настройки по умолчанию");
         sender.sendMessage(ChatColor.YELLOW + "/npl list" + ChatColor.GRAY + " : Список игроков на испытательном сроке");
     }
@@ -3611,9 +3750,27 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         try {
+            Player player = event.getPlayer();
+            UUID uuid = player.getUniqueId();
+
+            Long cooldownSec = nplChatCooldownSeconds.get(uuid);
+            if (cooldownSec != null && cooldownSec > 0) {
+                long now = System.currentTimeMillis();
+                Long last = nplLastChatTime.get(uuid);
+                long cooldownMs = cooldownSec * 1000L;
+
+                if (last != null && (now - last) < cooldownMs) {
+                    event.setCancelled(true);
+                    long leftSec = Math.max(1L, (cooldownMs - (now - last) + 999L) / 1000L);
+                    player.sendMessage(ChatColor.RED + "Вам установлена задержка сообщений. Подождите ещё "
+                            + ChatColor.YELLOW + formatDurationHuman(leftSec) + ChatColor.RED + " перед следующим сообщением.");
+                    return;
+                }
+                nplLastChatTime.put(uuid, now);
+            }
+
             if (!sendMinecraftChatToSite) return;
 
-            Player player = event.getPlayer();
             String playerName = player.getName();
             String messageText = event.getMessage();
 
