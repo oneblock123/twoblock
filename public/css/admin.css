@@ -1,0 +1,753 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg-sunset: url('../sunset-bg.jpg');
+  --glass-bg: rgba(178, 148, 208, 0.42);
+  --glass-bg-hover: rgba(195, 168, 225, 0.52);
+  --glass-border: rgba(255, 255, 255, 0.38);
+  --glass-shadow: 0 12px 32px rgba(25, 8, 45, 0.3);
+
+  --accent-purple: #7c3aed;
+  --accent-green: #22c55e;
+  --accent-red: #ef4444;
+  --accent-blue: #0ea5e9;
+
+  --text-pure: #ffffff;
+  --text-main: #f5f2fa;
+  --text-sub: #e2d9f3;
+
+  --font-logo: 'Press Start 2P', monospace;
+  --font-main: 'Outfit', 'Inter', -apple-system, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-main);
+  color: var(--text-main);
+  background: #12091e var(--bg-sunset) center center / cover no-repeat fixed;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(255, 180, 80, 0.08) 0%, rgba(30, 12, 50, 0.4) 60%, rgba(15, 6, 25, 0.65) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* AUTH OVERLAY */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 5, 22, 0.82);
+  backdrop-filter: blur(20px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.auth-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  background: rgba(188, 158, 220, 0.48);
+  backdrop-filter: blur(24px);
+  border: 1.5px solid var(--glass-border);
+  border-radius: 36px;
+  padding: 36px 32px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.auth-icon {
+  font-size: 42px;
+  margin-bottom: 12px;
+}
+
+.auth-card h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.auth-card p {
+  font-size: 13.5px;
+  color: var(--text-sub);
+  margin-bottom: 24px;
+}
+
+.auth-input-group {
+  margin-bottom: 18px;
+  position: relative;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: 28px;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+  text-align: center;
+}
+
+.auth-input:focus {
+  border-color: #c084fc;
+}
+
+.auth-error-msg {
+  color: #fca5a5;
+  font-size: 13px;
+  margin-top: 8px;
+  display: none;
+}
+
+.auth-error-msg.visible {
+  display: block;
+}
+
+.auth-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 28px;
+  border: none;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+}
+
+/* ========================================================
+   TOP HEADER (LOGO LEFT, TABS CENTER, SEARCH RIGHT)
+   ======================================================== */
+.admin-top-bar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 30px 32px 10px;
+}
+
+/* TwoBlocks Logo Capsule */
+.admin-brand-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 28px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1.5px solid var(--glass-border);
+  border-radius: 36px;
+  box-shadow: var(--glass-shadow);
+  text-decoration: none;
+}
+
+.admin-logo-img {
+  width: 26px;
+  height: 26px;
+  image-rendering: pixelated;
+}
+
+.admin-brand-title {
+  font-family: var(--font-logo);
+  font-size: 18px;
+  color: var(--text-pure);
+  letter-spacing: 1px;
+}
+
+/* Center Tabs Pill ("Новые", "Принятые") */
+.admin-center-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1.5px solid var(--glass-border);
+  border-radius: 40px;
+  padding: 6px 8px;
+  box-shadow: var(--glass-shadow);
+}
+
+.admin-tab-btn {
+  padding: 12px 26px;
+  border-radius: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-tab-btn:hover {
+  color: #fff;
+}
+
+.admin-tab-btn.active {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.8), rgba(126, 34, 206, 0.85));
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 16px rgba(147, 51, 234, 0.4);
+}
+
+.tab-badge-num {
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.25);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+/* Right Search Capsule ("справа сверху поиск") */
+.admin-search-capsule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1.5px solid var(--glass-border);
+  border-radius: 36px;
+  box-shadow: var(--glass-shadow);
+  width: 320px;
+  transition: all 0.25s ease;
+}
+
+.admin-search-capsule:focus-within {
+  border-color: #c084fc;
+  width: 360px;
+  background: rgba(188, 158, 220, 0.55);
+}
+
+.search-icon {
+  font-size: 16px;
+  color: #fff;
+  opacity: 0.8;
+}
+
+.search-input-field {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14.5px;
+}
+
+.search-input-field::placeholder {
+  color: rgba(240, 230, 255, 0.75);
+}
+
+/* ========================================================
+   MAIN CONTENT AREA (LEFT STATS, RIGHT APPLICATIONS)
+   ======================================================== */
+.admin-main-grid {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 36px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px 32px 40px;
+}
+
+/* LEFT SIDE INFO & QUICK TOOLS */
+.admin-left-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 440px;
+}
+
+.admin-glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1.5px solid var(--glass-border);
+  border-radius: 32px;
+  padding: 24px;
+  box-shadow: var(--glass-shadow);
+}
+
+.admin-card-header {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stats-row-pills {
+  display: flex;
+  gap: 12px;
+}
+
+.stat-pill {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 12px 14px;
+  text-align: center;
+}
+
+.stat-pill-num {
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.stat-pill-label {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-top: 2px;
+}
+
+.quick-links-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quick-link-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.quick-link-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateX(4px);
+}
+
+/* ========================================================
+   RIGHT APPLICATIONS LIST (MATCHES MOCKUP CAPSULES!)
+   ======================================================== */
+.admin-right-col {
+  width: 620px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.apps-scrollable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  padding-right: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(210, 180, 245, 0.4) transparent;
+}
+
+.apps-scrollable-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.apps-scrollable-list::-webkit-scrollbar-thumb {
+  background: rgba(210, 180, 245, 0.35);
+  border-radius: 10px;
+}
+
+/* Application Row Capsule (Exact match to Mockup!) */
+.app-capsule-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1.5px solid var(--glass-border);
+  border-radius: 40px;
+  box-shadow: var(--glass-shadow);
+  transition: all 0.25s ease;
+}
+
+.app-capsule-card:hover {
+  background: var(--glass-bg-hover);
+  border-color: rgba(255, 255, 255, 0.55);
+  transform: translateY(-2px);
+}
+
+/* Avatar circle on the left */
+.app-avatar-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.app-avatar-circle img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+/* Middle info pill */
+.app-info-pill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.app-nick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-nick-text {
+  font-size: 15.5px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.app-status-badge.pending {
+  background: rgba(245, 158, 11, 0.3);
+  color: #fde047;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.app-status-badge.approved {
+  background: rgba(34, 197, 94, 0.3);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.app-meta-text {
+  font-size: 12.5px;
+  color: var(--text-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Right Circular Action Buttons (Exact match to Mockup!) */
+.app-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.action-circle-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.action-circle-btn:hover {
+  transform: scale(1.12);
+}
+
+.action-circle-btn.btn-approve {
+  background: rgba(34, 197, 94, 0.45);
+  border-color: rgba(34, 197, 94, 0.7);
+}
+
+.action-circle-btn.btn-approve:hover {
+  background: #22c55e;
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.6);
+}
+
+.action-circle-btn.btn-view {
+  background: rgba(168, 85, 247, 0.45);
+  border-color: rgba(168, 85, 247, 0.7);
+}
+
+.action-circle-btn.btn-view:hover {
+  background: #a855f7;
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.6);
+}
+
+.action-circle-btn.btn-copy {
+  background: rgba(14, 165, 233, 0.45);
+  border-color: rgba(14, 165, 233, 0.7);
+}
+
+.action-circle-btn.btn-copy:hover {
+  background: #0ea5e9;
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.6);
+}
+
+.action-circle-btn.btn-delete {
+  background: rgba(239, 68, 68, 0.45);
+  border-color: rgba(239, 68, 68, 0.7);
+}
+
+.action-circle-btn.btn-delete:hover {
+  background: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.6);
+}
+
+.empty-state-card {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-sub);
+  font-size: 15px;
+}
+
+/* ========================================================
+   DETAIL MODAL DIALOG
+   ======================================================== */
+.detail-modal-box {
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  background: rgba(30, 15, 48, 0.92);
+  backdrop-filter: blur(24px);
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 36px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detail-header {
+  padding: 24px 30px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.detail-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.detail-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.detail-avatar img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.detail-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.detail-close-x {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #fff;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.detail-close-x:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.detail-body {
+  padding: 24px 30px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-field {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 18px;
+  padding: 14px 18px;
+}
+
+.detail-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #c084fc;
+  margin-bottom: 4px;
+}
+
+.detail-field-value {
+  font-size: 14.5px;
+  color: #fff;
+  line-height: 1.4;
+}
+
+.detail-footer {
+  padding: 20px 30px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-danger-pill {
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-danger-pill:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+.detail-status-btns {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-swl-pill {
+  background: rgba(14, 165, 233, 0.25);
+  border: 1px solid rgba(14, 165, 233, 0.5);
+  color: #7dd3fc;
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-approve-pill {
+  background: linear-gradient(135deg, #15803d, #22c55e);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ========================================================
+   RESPONSIVE
+   ======================================================== */
+@media (max-width: 1080px) {
+  .admin-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 20px 16px 10px;
+  }
+
+  .admin-search-capsule {
+    width: 100%;
+  }
+
+  .admin-search-capsule:focus-within {
+    width: 100%;
+  }
+
+  .admin-main-grid {
+    flex-direction: column;
+    padding: 16px;
+    gap: 20px;
+  }
+
+  .admin-left-col {
+    max-width: 100%;
+  }
+
+  .admin-right-col {
+    width: 100%;
+  }
+}

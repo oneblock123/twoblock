@@ -1,0 +1,426 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TwoBlocks — Приватный ванильный сервер Minecraft</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./public/css/style.css?v=20261117_true4k_orig">
+  <link rel="icon" href="./public/logo.png">
+</head>
+<body>
+  <!-- BACKGROUND AUDIO -->
+  <audio id="ambientAudio" src="./public/music.mp3" loop autoplay preload="auto"></audio>
+
+  <!-- MAIN SPLIT LAYOUT -->
+  <div class="twoblocks-main-layout">
+
+    <!-- ========================================== -->
+    <!-- LEFT COLUMN (BRAND, ADMIN CARDS, RULES BTN) -->
+    <!-- ========================================== -->
+    <aside class="layout-left">
+      <div class="left-top-group">
+        <!-- TwoBlocks Brand Capsule (Only text, no avatar) -->
+        <div class="brand-capsule">
+          <span class="brand-logo-text">TwoBlocks</span>
+        </div>
+
+        <!-- 3 Rounded Square Feature Cards ("Добрые админы" и др.) -->
+        <div class="admin-cards-grid">
+          <!-- Card 1: Добрые админы -->
+          <div class="admin-square-card">
+            <div class="admin-card-icon">👑</div>
+            <div class="admin-card-title">Добрые админы</div>
+            <div class="admin-card-desc">Всегда выслушают и помогут</div>
+          </div>
+
+          <!-- Card 2: Доброе комьюнити -->
+          <div class="admin-square-card">
+            <div class="admin-card-icon">👥</div>
+            <div class="admin-card-title">Доброе комьюнити</div>
+            <div class="admin-card-desc">Без токсичности и гриферства</div>
+          </div>
+
+          <!-- Card 3: Чистая ванила -->
+          <div class="admin-square-card">
+            <div class="admin-card-icon">🎙️</div>
+            <div class="admin-card-title">Чистая ванила</div>
+            <div class="admin-card-desc">Voice Chat & честная игра</div>
+          </div>
+        </div>
+
+        <!-- Twitch Stream Player Capsule -->
+        <div class="twitch-capsule">
+          <div class="twitch-header">
+            <div class="twitch-header-left">
+              <span class="twitch-dot"></span>
+              <span class="twitch-channel-title">Twitch • twoblocks</span>
+            </div>
+            <a href="https://www.twitch.tv/twoblocks" target="_blank" rel="noopener noreferrer" class="twitch-link-badge">
+              Смотреть на Twitch ↗
+            </a>
+          </div>
+          <div class="twitch-player-container" id="twitchPlayerContainer">
+            <!-- Dynamic Twitch Player iframe populated via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Left: Rules Button & Music Toggle -->
+      <div class="left-bottom-group">
+        <button type="button" class="rules-capsule-btn" id="openRulesBtn" title="Ознакомиться с правилами сервера">
+          <span>📜</span>
+          <span>Правила сервера</span>
+        </button>
+
+        <button type="button" class="music-capsule-btn" id="musicToggleBtn" title="Включить / выключить музыку">
+          <span>🎵</span>
+          <span id="musicBtnLabel">Музыка</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ========================================== -->
+    <!-- RIGHT COLUMN (APPLICATION FORM - SCROLLABLE)-->
+    <!-- ========================================== -->
+    <main class="layout-right">
+      <div class="scrollable-form-container">
+
+        <!-- 1. Live Monitor & Click-to-copy Server IP Capsule -->
+        <div class="glass-capsule monitor-capsule" id="headerServerPill" title="Нажмите, чтобы скопировать IP сервера">
+          <div class="monitor-left">
+            <span class="live-dot" id="headerServerDot"></span>
+            <span class="monitor-online-label" id="headerServerCount">Сервер онлайн • Нажмите для копирования IP</span>
+          </div>
+          <div class="monitor-right">
+            <span class="copy-hint-pill">📋 Клик для IP</span>
+          </div>
+        </div>
+
+        <!-- Hidden container for player list if needed by script -->
+        <div id="heroPlayerCount" style="display: none;"></div>
+        <div id="heroPlayersList" style="display: none;"></div>
+
+        <!-- STATUS SCREEN (Показывается если человек уже подал заявку с этого браузера) -->
+        <div id="statusContainer" class="glass-capsule status-box" style="display: none;">
+          <div class="status-badge-icon" id="statusIcon">⏳</div>
+          <h2 class="status-heading" id="statusTitle">Заявка на рассмотрении</h2>
+          <p class="status-desc" id="statusDesc">Ваша анкета находится на рассмотрении администрации. Ожидайте решения.</p>
+          <div class="status-nick-line" id="statusNickLine" style="display: none;"></div>
+        </div>
+
+        <!-- MAIN APPLICATION FORM -->
+        <div id="formMainCard">
+          <form id="applicationForm" novalidate style="display: flex; flex-direction: column; gap: 14px;">
+
+            <!-- Header Description Pill -->
+            <div class="glass-capsule form-title-capsule">
+              <div class="form-title-text">Заявка на сервер Два Блока</div>
+              <div class="form-sub-text">Заполните короткую анкету, чтобы получить доступ к серверу</div>
+            </div>
+
+            <!-- Field 1: Никнейм в Minecraft -->
+            <div class="glass-capsule qa-input-bar" id="row-nickname">
+              <div class="field-capsule-inner">
+                <div class="avatar-preview-badge" id="avatarPreview">Скин</div>
+                <input type="text" id="nickname" name="nickname" class="field-capsule-input" placeholder="1. Ваш никнейм в Minecraft" required autocomplete="off">
+              </div>
+            </div>
+
+            <!-- Field 2: Сколько тебе лет и как обращаться? -->
+            <div class="glass-capsule qa-input-bar" id="row-age">
+              <div class="field-capsule-inner">
+                <input type="text" id="ageAndName" name="ageAndName" class="field-capsule-input" placeholder="2. Сколько тебе лет и как обращаться?" required>
+              </div>
+            </div>
+
+            <!-- Field 3: Сколько лет играешь в Minecraft? -->
+            <div class="glass-capsule qa-input-bar" id="row-years">
+              <div class="field-capsule-inner">
+                <input type="text" id="yearsPlaying" name="yearsPlaying" class="field-capsule-input" placeholder="3. Сколько лет играешь в Minecraft?" required>
+              </div>
+            </div>
+
+            <!-- Field 4: Стиль игры (3 Square Cards in a row, matches the mockup!) -->
+            <div class="style-selector-row" id="row-styles">
+              <label class="style-select-card">
+                <input type="checkbox" name="gameStyles" value="Строительство">
+                <div class="style-card-icon">🏗️</div>
+                <div class="style-card-label">Строительство</div>
+              </label>
+
+              <label class="style-select-card">
+                <input type="checkbox" name="gameStyles" value="Выживание" checked>
+                <div class="style-card-icon">⚔️</div>
+                <div class="style-card-label">Выживание</div>
+              </label>
+
+              <label class="style-select-card">
+                <input type="checkbox" name="gameStyles" value="Фермы">
+                <div class="style-card-icon">⚙️</div>
+                <div class="style-card-label">Фермы</div>
+              </label>
+            </div>
+
+            <!-- Field 5: Уровень игры (3-segment pill) -->
+            <div class="pill-options-group" id="row-level">
+              <label class="pill-option-btn">
+                <input type="radio" name="skillLevel" value="Новичок">
+                <span>🟢 Новичок</span>
+              </label>
+              <label class="pill-option-btn">
+                <input type="radio" name="skillLevel" value="Средний" checked>
+                <span>🟡 Средний</span>
+              </label>
+              <label class="pill-option-btn">
+                <input type="radio" name="skillLevel" value="Продвинутый">
+                <span>🔴 Продвинутый</span>
+              </label>
+            </div>
+
+            <!-- Field 6: Чем планируешь заниматься? -->
+            <div class="glass-capsule textarea-capsule qa-textarea-bar" id="row-plans">
+              <textarea id="plansOnServer" name="plansOnServer" class="field-capsule-textarea" placeholder="6. Чем планируешь заниматься на сервере? (постройки, механизмы, торговля...)" required></textarea>
+            </div>
+
+            <!-- Field 7: Играть один или с друзьями? -->
+            <div class="glass-capsule textarea-capsule qa-textarea-bar" id="row-friends">
+              <textarea id="playStyleAndFriends" name="playStyleAndFriends" class="field-capsule-textarea" placeholder="7. Планируешь играть один или искать компанию? Есть ли друзья?" required></textarea>
+            </div>
+
+            <!-- Field 8: Время для сервера -->
+            <div class="glass-capsule qa-input-bar" id="row-time">
+              <div class="field-capsule-inner">
+                <input type="text" id="timeCommitment" name="timeCommitment" class="field-capsule-input" placeholder="8. Сколько времени готов уделять серверу? (например: 2-3 часа в день)" required>
+              </div>
+            </div>
+
+            <!-- Field 9: Почему выбрал приватный ванильный сервер? -->
+            <div class="glass-capsule textarea-capsule qa-textarea-bar" id="row-why">
+              <textarea id="whyVanilla" name="whyVanilla" class="field-capsule-textarea" placeholder="9. Почему решил выбрать именно приватный ванильный сервер?" required></textarea>
+            </div>
+
+            <!-- Field 10: Что важно в сообществе? -->
+            <div class="glass-capsule textarea-capsule qa-textarea-bar" id="row-community">
+              <textarea id="communityImportance" name="communityImportance" class="field-capsule-textarea" placeholder="10. Что для тебя важно в сообществе? (доверие, совместные проекты...)" required></textarea>
+            </div>
+
+            <!-- Field 11: Согласие с правилами сервера (Обязательный чекбокс) -->
+            <div class="glass-capsule" id="row-rules">
+              <label class="rules-agree-checkbox-label" for="rulesAgreed">
+                <input type="checkbox" id="rulesAgreed" name="rulesAgreed" required>
+                <span class="custom-checkbox-box"></span>
+                <span class="rules-agree-text">Прочитал(а) правила сервера и согласен(сна) соблюдать их</span>
+              </label>
+            </div>
+
+            <!-- Field 12: Голосовой чат и микрофон -->
+            <div class="glass-capsule" id="row-voice">
+              <div style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;">12. Наличие микрофона (Simple Voice Chat):</div>
+              <div class="radio-options-vertical">
+                <label class="radio-item-pill">
+                  <input type="radio" name="microphone" value="Да, есть микрофон и хочу общаться в войсе" checked>
+                  <span>Есть микрофон, хочу общаться в голосовом чате</span>
+                </label>
+                <label class="radio-item-pill">
+                  <input type="radio" name="microphone" value="Есть микрофон, но больше слушаю">
+                  <span>Есть микрофон, но чаще просто слушаю</span>
+                </label>
+                <label class="radio-item-pill">
+                  <input type="radio" name="microphone" value="Микрофона нет, общаюсь только в чате">
+                  <span>Микрофона нет, общаюсь текстом</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Submit Button Capsule -->
+            <button type="submit" class="submit-capsule-btn" id="submitBtn">
+              Отправить заявку на Два Блока
+            </button>
+
+          </form>
+        </div>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- ========================================== -->
+  <!-- RULES MODAL DIALOG (OFFICIAL DETAILED RULES)-->
+  <!-- ========================================== -->
+  <div class="modal-overlay" id="rulesModal">
+    <div class="rules-modal-box">
+      <div class="rules-modal-header">
+        <h3 class="rules-modal-title">
+          <span>📜</span>
+          <span>ПРАВИЛА СЕРВЕРА MINECRAFT</span>
+        </h3>
+        <button type="button" class="rules-close-icon" id="closeRulesBtn" title="Закрыть">✕</button>
+      </div>
+
+      <div class="rules-modal-body">
+        <div style="background: rgba(255, 255, 255, 0.08); padding: 14px 18px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.15);">
+          <strong>Добро пожаловать на сервер!</strong><br>
+          Наша цель — создать комфортный игровой мир, где каждый может спокойно развиваться, строить, добывать ресурсы и взаимодействовать с другими игроками.<br>
+          Игра строится на честности, уважении и взаимных договорённостях. Незнание правил не освобождает от ответственности.
+        </div>
+
+        <!-- 1. Запрет на гриферство -->
+        <div>
+          <div class="rules-section-title">1. Запрет на гриферство</div>
+          <div class="rules-list">
+            <div class="rules-item"><strong>1.1.</strong> Запрещено уничтожать, ломать, портить или изменять постройки других игроков без их разрешения.</div>
+            <div class="rules-item"><strong>1.2.</strong> Запрещено забирать, перемещать или уничтожать чужие ресурсы, сундуки, механизмы и другие предметы.</div>
+            <div class="rules-item"><strong>1.3.</strong> Запрещено поджигать чужие постройки, устраивать взрывы, использовать лаву, воду и другие способы нанесения ущерба чужому имуществу.</div>
+            <div class="rules-item"><strong>1.4.</strong> Запрещено намеренно мешать развитию и игровому процессу других участников.</div>
+          </div>
+        </div>
+
+        <!-- 2. Личные территории и их защита -->
+        <div>
+          <div class="rules-section-title">2. Личные территории и их защита</div>
+          <div class="rules-list">
+            <div class="rules-item"><strong>2.1.</strong> Каждый игрок имеет право на личную территорию, которую он использует для строительства, развития и хранения ресурсов.</div>
+            <div class="rules-item"><strong>2.2.</strong> Территория считается занятой, если игрок начал её осваивать: построил сооружения, обустроил участок, обозначил границы или иным очевидным образом заявил о своих владениях.</div>
+            <div class="rules-item"><strong>2.3.</strong> Игрокам рекомендуется обозначать границы своих территорий и при необходимости сообщать об этом администрации.</div>
+            <div class="rules-item"><strong>2.4.</strong> Запрещено занимать, застраивать или присваивать уже освоенную другим игроком территорию без его согласия.</div>
+            <div class="rules-item"><strong>2.5.</strong> Запрещено копать ямы, прокладывать тоннели, устанавливать блоки и изменять ландшафт на чужой территории без разрешения владельца.</div>
+            <div class="rules-item"><strong>2.6.</strong> Запрещено портить территорию вокруг чужих построек, даже если сами постройки не затронуты.</div>
+            <div class="rules-item"><strong>2.7.</strong> Если игрок хочет расширить свою территорию, ему необходимо убедиться, что выбранный участок никем не занят.</div>
+            <div class="rules-item"><strong>2.8.</strong> Запрещено объявлять своей чрезмерно большую территорию, которую игрок фактически не осваивает и не использует. Нельзя занимать огромные участки исключительно для того, чтобы другие игроки не могли там строить, добывать ресурсы или развиваться.</div>
+            <div class="rules-item"><strong>2.9.</strong> Размер личной территории должен соответствовать реальным постройкам, хозяйству и планам развития игрока. В случае спора разумность занимаемой площади оценивает администрация.</div>
+            <div class="rules-item"><strong>2.10.</strong> Если территория давно заброшена или принадлежность участка вызывает споры, решение о возможности его использования принимает администрация.</div>
+            <div class="rules-item"><strong>2.11.</strong> В случае конфликта относительно границ владений администрация рассматривает ситуацию на основании построек, обозначенных границ, истории действий и других имеющихся доказательств.</div>
+          </div>
+        </div>
+
+        <!-- 3. Природные структуры и объекты мира -->
+        <div>
+          <div class="rules-section-title">3. Природные структуры и объекты мира</div>
+          <div class="rules-list">
+            <div class="rules-item"><strong>3.1.</strong> Запрещено присваивать себе целые природные структуры Minecraft, объявляя их личной собственностью только на основании того, что вы нашли их первым.</div>
+            <div class="rules-item"><strong>3.2.</strong> К таким структурам относятся деревни, храмы, аванпосты разбойников, древние города, крепости, бастионы, заброшенные шахты, лесные особняки, океанские монументы и другие сгенерированные объекты мира.</div>
+            <div class="rules-item"><strong>3.3.</strong> Запрещено полностью перекрывать доступ к природным структурам, устанавливать вокруг них ограждения или объявлять их закрытой территорией без согласования с администрацией.</div>
+            <div class="rules-item"><strong>3.4.</strong> Игрок может использовать отдельные постройки, помещения и участки структуры для личных нужд, если это не мешает другим игрокам и не нарушает правила.</div>
+            <div class="rules-item"><strong>3.5.</strong> Запрещено намеренно разрушать, портить или изменять природные структуры таким образом, чтобы лишить остальных игроков возможности ими пользоваться.</div>
+            <div class="rules-item"><strong>3.6.</strong> Найденные сундуки, добытые ресурсы и другие предметы не становятся автоматически собственностью нашедшего структуру игрока. Приоритет принадлежит тому, кто законно получил или добыл эти предметы, с учётом договорённостей и правил сервера.</div>
+            <div class="rules-item"><strong>3.7.</strong> Если игрок хочет сделать какую-либо структуру своей базой или обустроить её под личные нужды, необходимо согласовать это с администрацией.</div>
+          </div>
+        </div>
+
+        <!-- 4. Честная игра и запрет читов -->
+        <div>
+          <div class="rules-section-title">4. Честная игра и запрет читов</div>
+          <div class="rules-list">
+            <div class="rules-item"><strong>4.1.</strong> Запрещено использовать любые читы, сторонние программы, модификации и инструменты, дающие нечестное преимущество перед другими игроками.</div>
+            <div class="rules-item">
+              <strong>4.2.</strong> Категорически запрещено использование:
+              <ul class="rules-sub-list">
+                <li>X-Ray и любых способов просмотра руд сквозь блоки.</li>
+                <li>Автокликеров и автоматического выполнения действий.</li>
+                <li>Автопрыжков и автоматизации передвижения.</li>
+                <li>Макросов и скриптов для автоматического выполнения игровых действий.</li>
+                <li>Ускорения передвижения и других способов получения сверхъестественной скорости.</li>
+                <li>Fly, SpeedHack, KillAura и аналогичных читов.</li>
+                <li>Любых обходов стандартной игровой механики, позволяющих получать нечестное преимущество.</li>
+              </ul>
+            </div>
+            <div class="rules-item"><strong>4.3.</strong> Запрещено использовать баги, ошибки сервера и уязвимости игровых механик для получения выгоды.</div>
+            <div class="rules-item"><strong>4.4.</strong> Если вы обнаружили баг или подозрительную механику, сообщите администрации, а не используйте её в своих интересах.</div>
+            <div class="rules-item"><strong>4.5.</strong> Разрешённые модификации не должны давать игровых преимуществ или нарушать честность игрового процесса.</div>
+          </div>
+        </div>
+
+        <!-- 5. PvP и взаимодействие между игроками -->
+        <div>
+          <div class="rules-section-title">5. PvP и взаимодействие между игроками</div>
+          <div class="rules-list">
+            <div class="rules-item"><strong>5.1.</strong> PvP на сервере разрешено исключительно по взаимному согласию обеих сторон.</div>
+            <div class="rules-item"><strong>5.2.</strong> Перед началом боя оба игрока должны явно согласиться на PvP.</div>
+            <div class="rules-item"><strong>5.3.</strong> Запрещено нападать на игроков без их согласия, в том числе из засады, во время добычи ресурсов или возвращения домой.</div>
+            <div class="rules-item"><strong>5.4.</strong> Договорённости о PvP должны быть понятны обеим сторонам. Если согласие не было получено, бой считается нарушением правил.</div>
+          </div>
+        </div>
+
+        <!-- 6. Сделки, обмен и договорённости о ресурсах -->
+        <div>
+          <div class="rules-section-title">6. Сделки, обмен и договорённости о ресурсах</div>
+          <div class="rules-list">
+            <div class="rules-item"><strong>6.1.</strong> Все сделки, обмены, совместная добыча и передача ресурсов осуществляются исключительно по договорённости между игроками.</div>
+            <div class="rules-item">
+              <strong>6.2.</strong> До начала совместной добычи или передачи ресурсов необходимо заранее определить:
+              <ul class="rules-sub-list">
+                <li>Какие ресурсы добываются или передаются.</li>
+                <li>Кому и в каком количестве они принадлежат.</li>
+                <li>Как будет распределяться полученная добыча.</li>
+                <li>На каких условиях осуществляется сделка.</li>
+              </ul>
+            </div>
+            <div class="rules-item">
+              <strong>6.3.</strong> Для предотвращения споров рекомендуется фиксировать договорённости:
+              <ul class="rules-sub-list">
+                <li>Видео- или фотозаписью.</li>
+                <li>Перепиской в игровом чате или других согласованных средствах общения.</li>
+                <li>В присутствии администратора сервера.</li>
+              </ul>
+            </div>
+            <div class="rules-item"><strong>6.4.</strong> Если возник спор, администрация рассматривает имеющиеся доказательства и договорённости сторон.</div>
+            <div class="rules-item"><strong>6.5.</strong> Администрация не гарантирует возврат ресурсов, если игроки не смогли подтвердить условия своей сделки.</div>
+          </div>
+        </div>
+
+        <!-- 7. Ответственность и наказания -->
+        <div>
+          <div class="rules-section-title">7. Ответственность и наказания</div>
+          <div class="rules-list">
+            <div class="rules-item">
+              <strong>7.1.</strong> За нарушение правил администрация вправе применить следующие меры:
+              <ul class="rules-sub-list">
+                <li>Предупреждение.</li>
+                <li>Временное ограничение доступа к серверу.</li>
+                <li>Временную или постоянную блокировку.</li>
+                <li>Снятие незаконно полученных ресурсов и предметов.</li>
+                <li>Восстановление повреждённой территории за счёт нарушителя.</li>
+              </ul>
+            </div>
+            <div class="rules-item"><strong>7.2.</strong> Мера наказания определяется с учётом тяжести нарушения, обстоятельств и наличия доказательств.</div>
+            <div class="rules-item"><strong>7.3.</strong> Попытки скрыть нарушение, удалить следы или обойти наказание могут рассматриваться как дополнительные отягчающие обстоятельства.</div>
+            <div class="rules-item"><strong>7.4.</strong> Решения администрации по спорным ситуациям принимаются на основании доказательств, логов и обстоятельств произошедшего.</div>
+          </div>
+        </div>
+
+        <!-- 8. Развитие и дополнение правил -->
+        <div>
+          <div class="rules-section-title">8. Развитие и дополнение правил</div>
+          <div class="rules-list">
+            <div class="rules-item"><strong>8.1.</strong> Сервер развивается, поэтому правила могут дополняться и изменяться по мере появления новых игровых механик, ситуаций и потребностей сообщества.</div>
+            <div class="rules-item"><strong>8.2.</strong> Все изменения и дополнения будут публиковаться в доступном для игроков месте.</div>
+            <div class="rules-item"><strong>8.3.</strong> Каждый участник обязан следить за актуальной редакцией правил.</div>
+            <div class="rules-item"><strong>8.4.</strong> Если какая-либо ситуация ещё не описана в правилах, администрация оставляет за собой право рассмотреть её индивидуально, исходя из принципов честной игры и уважения к другим участникам.</div>
+          </div>
+        </div>
+
+        <!-- ГЛАВНЫЙ ПРИНЦИП СЕРВЕРА -->
+        <div class="rules-principle-card">
+          <div class="rules-principle-title">💎 ГЛАВНЫЙ ПРИНЦИП СЕРВЕРА</div>
+          <div class="rules-principle-text">
+            «Играй честно, уважай чужой труд и не порть другим удовольствие от игры. Мы здесь собрались, чтобы играть и получать удовольствие, а не выяснять отношения из-за чужих построек и ресурсов.»
+          </div>
+          <div style="margin-top: 8px; font-weight: 700; color: #fff;">Приятной игры!</div>
+        </div>
+      </div>
+
+      <div class="rules-modal-footer">
+        <button type="button" class="rules-modal-btn-close" id="closeRulesBtnBottom">Понятно, закрыть правила</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./public/js/supabase-config.js?v=2026111701"></script>
+  <script type="module" src="./public/js/app.js?v=2026111701"></script>
+</body>
+</html>

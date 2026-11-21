@@ -1,0 +1,177 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TwoBlocks — Панель куратора заявок</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./public/css/admin.css?v=2026111702">
+  <link rel="icon" href="./public/logo.png">
+</head>
+<body>
+  <!-- Admin Auth Overlay -->
+  <div class="auth-overlay" id="adminAuthOverlay">
+    <div class="auth-card">
+      <div class="auth-icon">🔒</div>
+      <h2>Панель куратора</h2>
+      <p>Введите пароль администратора для просмотра заявок</p>
+      <form id="adminAuthForm" autocomplete="off">
+        <div class="auth-input-group">
+          <input type="password" id="adminPassInput" class="auth-input" placeholder="Введите пароль..." autocomplete="off" required autofocus>
+          <div class="auth-error-msg" id="adminAuthError">Неверный пароль. Попробуйте снова.</div>
+        </div>
+        <button type="submit" class="auth-btn">Войти в панель</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOP HEADER (EXACT MATCH TO MOCKUP) -->
+  <header class="admin-top-bar">
+    <!-- Left: TwoBlocks Logo Capsule -->
+    <a href="./" class="admin-brand-capsule">
+      <img src="./public/logo.png" alt="TwoBlocks" class="admin-logo-img">
+      <span class="admin-brand-title">TwoBlocks</span>
+    </a>
+
+    <!-- Center: Tabs ("Новые", "Принятые") -->
+    <nav class="admin-center-tabs">
+      <button type="button" class="admin-tab-btn active filter-tab" data-status="pending">
+        <span>Новые</span>
+        <span class="tab-badge-num" id="countPending">0</span>
+      </button>
+      <button type="button" class="admin-tab-btn filter-tab" data-status="approved">
+        <span>Принятые</span>
+        <span class="tab-badge-num" id="countApproved">0</span>
+      </button>
+      <button type="button" class="admin-tab-btn filter-tab" data-status="all" style="font-size: 13px; opacity: 0.85;">
+        <span>Все (<span id="countAll">0</span>)</span>
+      </button>
+    </nav>
+
+    <!-- Right: Search Capsule -->
+    <div class="admin-search-capsule">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" class="search-input-field" placeholder="Поиск по никнейму...">
+    </div>
+  </header>
+
+  <!-- MAIN GRID -->
+  <div class="admin-main-grid">
+    <!-- LEFT SIDE: STATS -->
+    <aside class="admin-left-col">
+      <!-- Quick Stats Card -->
+      <div class="admin-glass-card">
+        <div class="admin-card-header">
+          <span>📊</span>
+          <span>Статистика заявок</span>
+        </div>
+        <div class="stats-row-pills">
+          <div class="stat-pill">
+            <div class="stat-pill-num" id="statPending">0</div>
+            <div class="stat-pill-label">Ожидают</div>
+          </div>
+          <div class="stat-pill">
+            <div class="stat-pill-num" id="statApproved">0</div>
+            <div class="stat-pill-label">Принято</div>
+          </div>
+          <div class="stat-pill">
+            <div class="stat-pill-num" id="statTotal">0</div>
+            <div class="stat-pill-label">Всего</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- RIGHT SIDE: APPLICATIONS LIST (MATCHES MOCKUP) -->
+    <main class="admin-right-col">
+      <div class="apps-scrollable-list" id="appsList">
+        <div class="empty-state-card">
+          <div>Загрузка заявок...</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- DETAIL MODAL DIALOG -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="detail-modal-box">
+      <div class="detail-header">
+        <div class="detail-header-left">
+          <div class="detail-avatar" id="modalAvatar"></div>
+          <div>
+            <div class="detail-title" id="modalNickname">Никнейм</div>
+            <div id="modalStatusBadge" class="app-status-badge pending">На рассмотрении</div>
+          </div>
+        </div>
+        <button type="button" class="detail-close-x" id="closeDetailModal" title="Закрыть">✕</button>
+      </div>
+
+      <div class="detail-body">
+        <div class="detail-field">
+          <div class="detail-field-label">1. Никнейм в Minecraft</div>
+          <div class="detail-field-value" id="modalNickVal">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">2. Возраст и обращение</div>
+          <div class="detail-field-value" id="modalAgeAndName">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">3. Стаж игры в Minecraft</div>
+          <div class="detail-field-value" id="modalYears">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">4. Стиль игры и уровень</div>
+          <div class="detail-field-value" id="modalStyles">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">5. Чем планирует заниматься на сервере</div>
+          <div class="detail-field-value" id="modalPlans">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">6. Игра соло или в компании / друзья</div>
+          <div class="detail-field-value" id="modalFriends">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">7. Время на сервер</div>
+          <div class="detail-field-value" id="modalTime">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">8. Почему приватный ванильный сервер?</div>
+          <div class="detail-field-value" id="modalWhy">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">9. Что важно в игровом сообществе?</div>
+          <div class="detail-field-value" id="modalCommunity">—</div>
+        </div>
+
+        <div class="detail-field">
+          <div class="detail-field-label">10. Правила и голосовой чат</div>
+          <div class="detail-field-value" id="modalRulesVoice">—</div>
+        </div>
+      </div>
+
+      <div class="detail-footer">
+        <button type="button" class="btn-danger-pill" id="deleteAppBtn">Удалить заявку</button>
+        <div class="detail-status-btns">
+          <button type="button" class="btn-swl-pill" id="modalCopySwlBtn">📋 swl add</button>
+          <button type="button" class="btn-approve-pill" id="modalApproveBtn">Принять заявку</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./public/js/supabase-config.js?v=2026111702"></script>
+  <script type="module" src="./public/js/admin.js?v=2026111702"></script>
+</body>
+</html>

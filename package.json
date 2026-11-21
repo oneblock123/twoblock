@@ -1,0 +1,17 @@
+{
+  "name": "twoblocks-minecraft-applications",
+  "version": "1.0.0",
+  "description": "Сайт для приёма заявок на приватный ванильный сервер Minecraft TWOBLOCKS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "minecraft",
+    "whitelist",
+    "forms",
+    "twoblocks"
+  ],
+  "author": "",
+  "license": "ISC"
+}
