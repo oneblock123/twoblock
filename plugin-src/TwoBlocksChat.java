@@ -2051,7 +2051,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
     private void handleTtsCommand(Player player, String message) {
         try {
-            if (player == null || !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+            if (player == null || (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z")))) {
                 return;
             }
             if (message == null || message.trim().isEmpty()) {
@@ -2106,7 +2106,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
             if (lower.startsWith("/tts ") || lower.equals("/tts") || lower.startsWith("/ттс ") || lower.equals("/ттс")) {
                 Player player = event.getPlayer();
-                if (!player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+                if (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
                     return;
                 }
                 event.setCancelled(true);
