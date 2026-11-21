@@ -215,6 +215,10 @@ public class VoicechatHook implements VoicechatPlugin {
     }
 
     public void playTts(Player player, String message) {
+        playTts(player, message, false);
+    }
+
+    public void playTts(Player player, String message, boolean isDemon) {
         if (player == null) {
             return;
         }
@@ -239,6 +243,10 @@ public class VoicechatHook implements VoicechatPlugin {
                 if (pcm == null || pcm.length == 0) {
                     player.sendMessage(ChatColor.RED + "Ошибка: не удалось декодировать аудиопоток.");
                     return;
+                }
+
+                if (isDemon) {
+                    pcm = applyDemonEffect(pcm);
                 }
 
                 if (currentAudioPlayer != null && currentAudioPlayer.isPlaying()) {
@@ -301,8 +309,9 @@ public class VoicechatHook implements VoicechatPlugin {
                     player.sendMessage(ChatColor.YELLOW + "[Предупреждение] Вы не подключены к Voice Chat каналу сервера.");
                 }
 
-                player.sendMessage(ChatColor.DARK_AQUA + "» " + ChatColor.WHITE + message);
-                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.4f, 1.6f);
+                String prefix = isDemon ? ChatColor.DARK_RED + "☠ [DEMON] " : ChatColor.DARK_AQUA + "» ";
+                player.sendMessage(prefix + ChatColor.WHITE + message);
+                player.playSound(player.getLocation(), isDemon ? Sound.ENTITY_WITHER_SPAWN : Sound.UI_BUTTON_CLICK, 0.4f, isDemon ? 0.6f : 1.6f);
 
             } catch (Throwable t) {
                 player.sendMessage(ChatColor.RED + "Ошибка воспроизведения: " + t.getMessage());
@@ -432,6 +441,38 @@ public class VoicechatHook implements VoicechatPlugin {
         } catch (Throwable t) {
             Bukkit.getLogger().warning("[TwoBlocks] JLayer decode error: " + t.getMessage());
             return null;
+        }
+    }
+
+    private short[] applyDemonEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            double pitchFactor = 0.68;
+            int newLength = (int) Math.round(input.length / pitchFactor);
+            short[] pitched = new short[newLength];
+
+            for (int i = 0; i < newLength; i++) {
+                double srcPos = i * pitchFactor;
+                int idx0 = (int) Math.floor(srcPos);
+                int idx1 = Math.min(idx0 + 1, input.length - 1);
+                double frac = srcPos - idx0;
+                pitched[i] = (short) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
+            }
+
+            int delaySamples = (int) (48000 * 0.085);
+            short[] output = new short[newLength];
+
+            for (int i = 0; i < newLength; i++) {
+                int dry = pitched[i];
+                int wet = (i >= delaySamples) ? (int) (pitched[i - delaySamples] * 0.42) : 0;
+                int combined = dry + wet;
+                if (combined > 32767) combined = 32767;
+                else if (combined < -32768) combined = -32768;
+                output[i] = (short) combined;
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
         }
     }
 }

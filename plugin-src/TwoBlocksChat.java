@@ -2075,7 +2075,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 return;
             }
             if (message == null || message.trim().isEmpty()) {
-                player.sendMessage(ChatColor.RED + "Использование: /tts <сообщение>");
+                player.sendMessage(ChatColor.RED + "Использование: /tts [demon/демон] <сообщение>");
                 return;
             }
 
@@ -2088,6 +2088,19 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             ttsCooldowns.put(player.getUniqueId(), now);
 
             String clean = message.trim();
+            boolean isDemon = false;
+            String lower = clean.toLowerCase();
+            if (lower.startsWith("demon ") || lower.startsWith("демон ")) {
+                isDemon = true;
+                int space = clean.indexOf(' ');
+                clean = (space != -1) ? clean.substring(space + 1).trim() : "";
+            }
+
+            if (clean.isEmpty()) {
+                player.sendMessage(ChatColor.RED + "Использование: /tts demon <сообщение>");
+                return;
+            }
+
             if (clean.length() > 200) {
                 clean = clean.substring(0, 200);
             }
@@ -2102,7 +2115,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 return;
             }
 
-            voicechatHook.playTts(player, clean);
+            voicechatHook.playTts(player, clean, isDemon);
         } catch (Throwable ignored) {
         }
     }
