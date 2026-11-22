@@ -154,10 +154,40 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private final Set<String> ttsAllowedNames = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Integer> playerTtsVolumes = new ConcurrentHashMap<>();
     private VoicechatHook voicechatHook = null;
+    private String fishAudioApiKey = "";
+    private final Map<String, String> fishAudioModels = new ConcurrentHashMap<>();
 
     public int getPlayerTtsVolume(UUID uuid) {
         if (uuid == null) return 100;
         return playerTtsVolumes.getOrDefault(uuid, 100);
+    }
+
+    public String getFishAudioApiKey() {
+        return fishAudioApiKey != null ? fishAudioApiKey.trim() : "";
+    }
+
+    public void setFishAudioApiKey(String key) {
+        this.fishAudioApiKey = (key != null) ? key.trim() : "";
+        getConfig().set("fishAudioApiKey", this.fishAudioApiKey);
+        saveConfig();
+    }
+
+    public String getFishAudioModelId(String voiceType) {
+        if (voiceType == null) return null;
+        String id = fishAudioModels.get(voiceType.toLowerCase());
+        if (id != null && !id.trim().isEmpty()) return id.trim();
+        return null;
+    }
+
+    public void setFishAudioModelId(String voiceType, String modelId) {
+        if (voiceType == null || modelId == null) return;
+        fishAudioModels.put(voiceType.toLowerCase(), modelId.trim());
+        getConfig().set("fishAudioModels." + voiceType.toLowerCase(), modelId.trim());
+        saveConfig();
+    }
+
+    public Map<String, String> getFishAudioModels() {
+        return Collections.unmodifiableMap(fishAudioModels);
     }
 
     private static String b(String s) {
@@ -330,6 +360,29 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             siteMessageFormat = getConfig().getString("siteMessageFormat", "&9[\u0421\u0430\u0439\u0442] &b{player}&7: &f{message}");
             sendMinecraftChatToSite = getConfig().getBoolean("sendMinecraftChatToSite", true);
             globalOnly = getConfig().getBoolean("globalOnly", true);
+
+            fishAudioApiKey = getConfig().getString("fishAudioApiKey", "");
+            fishAudioModels.clear();
+            fishAudioModels.put("sidorovich", "9a9cf47702da476aa4629e2506d4a857");
+            fishAudioModels.put("bandit", "3f8d38102d514dbba1f99c85df36c53e");
+            fishAudioModels.put("patrick", "bf322df2096a46f18c579d0baa36f41d");
+            fishAudioModels.put("spongebob", "933563129e564b19a115bedd57b7406a");
+            fishAudioModels.put("georgian", "5a2d5e305e9944c68c2d5884bbfa8a91");
+            fishAudioModels.put("katya", "7f4c3a21603d4ee7b359f13ca8159f8a");
+            fishAudioModels.put("catgirl", "d07255be9c254e08a54d5d36e2978d52");
+            fishAudioModels.put("pudge", "b21a8d5f30e447b8801d0c4391264c7f");
+            fishAudioModels.put("navalny", "c530b147ea414436814238e8ec4344d5");
+            fishAudioModels.put("ut", "4b5d259c118742419ef0bb4fa5069b2d");
+            fishAudioModels.put("brainrot", "1e5c8e23924748d5bd8fa3473f769024");
+            ConfigurationSection ms = getConfig().getConfigurationSection("fishAudioModels");
+            if (ms != null) {
+                for (String k : ms.getKeys(false)) {
+                    String v = ms.getString(k);
+                    if (v != null && !v.trim().isEmpty()) {
+                        fishAudioModels.put(k.toLowerCase(), v.trim());
+                    }
+                }
+            }
         } catch (Throwable ignored) {}
     }
 
@@ -2270,6 +2323,60 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 return;
             }
 
+            if (lower.startsWith("fishkey ") || lower.equals("fishkey") ||
+                lower.startsWith("apikey ") || lower.equals("apikey")) {
+                if (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+                    player.sendMessage(ChatColor.RED + "У вас нет прав на настройку Fish Audio.");
+                    return;
+                }
+                int space = clean.indexOf(' ');
+                String keyArg = (space != -1) ? clean.substring(space + 1).trim() : "";
+                if (keyArg.isEmpty() || keyArg.equalsIgnoreCase("status")) {
+                    String currentKey = getFishAudioApiKey();
+                    if (currentKey.isEmpty()) {
+                        player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "TTS" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.YELLOW + "Fish Audio API ключ: " + ChatColor.RED + "не установлен" + ChatColor.YELLOW + " (используется встроенный DSP через Google TTS).");
+                    } else {
+                        String masked = (currentKey.length() > 8) ? currentKey.substring(0, 4) + "..." + currentKey.substring(currentKey.length() - 4) : "***";
+                        player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "TTS" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.YELLOW + "Fish Audio API ключ: " + ChatColor.GREEN + masked + ChatColor.YELLOW + " (активна нейро-озвучка Fish Audio).");
+                    }
+                    player.sendMessage(ChatColor.GRAY + "Чтобы установить ключ: " + ChatColor.YELLOW + "/tts fishkey <ваш_ключ>");
+                    player.sendMessage(ChatColor.GRAY + "Чтобы отключить Fish Audio: " + ChatColor.YELLOW + "/tts fishkey off");
+                    return;
+                }
+
+                if (keyArg.equalsIgnoreCase("off") || keyArg.equalsIgnoreCase("none") || keyArg.equalsIgnoreCase("clear")) {
+                    setFishAudioApiKey("");
+                    player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "TTS" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.YELLOW + "Fish Audio API ключ очищен. Включён режим локального DSP озвучивания.");
+                    return;
+                }
+
+                setFishAudioApiKey(keyArg);
+                player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "TTS" + ChatColor.DARK_GRAY + "] "
+                        + ChatColor.GREEN + "Fish Audio API ключ успешно сохранён! Нейросетевая генерация персонажей активирована.");
+                return;
+            }
+
+            if (lower.startsWith("model ")) {
+                if (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+                    player.sendMessage(ChatColor.RED + "У вас нет прав на настройку моделей Fish Audio.");
+                    return;
+                }
+                String[] parts = clean.split("\\s+");
+                if (parts.length < 3) {
+                    player.sendMessage(ChatColor.RED + "Использование: /tts model <голос> <reference_id>");
+                    return;
+                }
+                String voiceKey = parts[1].toLowerCase();
+                String modelId = parts[2].trim();
+                setFishAudioModelId(voiceKey, modelId);
+                player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "TTS" + ChatColor.DARK_GRAY + "] "
+                        + ChatColor.GREEN + "Модель для голоса " + ChatColor.YELLOW + voiceKey + ChatColor.GREEN + " установлена: " + ChatColor.AQUA + modelId);
+                return;
+            }
+
             if (!isTtsAllowed(player)) {
                 player.sendMessage(ChatColor.RED + "У вас нет разрешения на использование команды /tts.");
                 return;
@@ -2303,14 +2410,65 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             ttsCooldowns.put(player.getUniqueId(), now);
 
             String voice = "normal";
+            String voiceMatched = null;
+            int textStartIdx = 0;
 
-            int firstSpace = clean.indexOf(' ');
-            String firstWord = (firstSpace != -1) ? clean.substring(0, firstSpace).toLowerCase() : clean.toLowerCase();
-            String matchedVoice = matchVoiceName(firstWord);
+            String lowerClean = clean.toLowerCase();
 
-            if (matchedVoice != null) {
-                voice = matchedVoice;
-                clean = (firstSpace != -1) ? clean.substring(firstSpace + 1).trim() : "";
+            String[][] voicePrefixes = new String[][]{
+                {"торгаш с кордона:", "sidorovich"},
+                {"торгаш с кордона", "sidorovich"},
+                {"мясник с хуком:", "pudge"},
+                {"мясник с хуком", "pudge"},
+                {"розовая звезда:", "patrick"},
+                {"розовая звезда", "patrick"},
+                {"морская губка:", "spongebob"},
+                {"морская губка", "spongebob"},
+                {"губка боб:", "spongebob"},
+                {"губка боб", "spongebob"},
+                {"добрый грузин:", "georgian"},
+                {"добрый грузин", "georgian"},
+                {"эмоциональная катя:", "katya"},
+                {"эмоциональная катя", "katya"},
+                {"эмоциальная катя:", "katya"},
+                {"эмоциальная катя", "katya"},
+                {"кошко девочка:", "catgirl"},
+                {"кошко девочка", "catgirl"},
+                {"алексей навальный:", "navalny"},
+                {"алексей навальный", "navalny"},
+                {"нереальный турнир:", "ut"},
+                {"нереальный турнир", "ut"},
+                {"итальянский брейнрот:", "brainrot"},
+                {"итальянский брейнрот", "brainrot"},
+                {"патрик стар:", "patrick"},
+                {"патрик стар", "patrick"}
+            };
+
+            for (String[] vp : voicePrefixes) {
+                String prefix = vp[0];
+                if (lowerClean.startsWith(prefix + " ")) {
+                    voiceMatched = vp[1];
+                    textStartIdx = prefix.length() + 1;
+                    break;
+                } else if (lowerClean.equals(prefix)) {
+                    voiceMatched = vp[1];
+                    textStartIdx = prefix.length();
+                    break;
+                }
+            }
+
+            if (voiceMatched != null) {
+                voice = voiceMatched;
+                clean = clean.substring(textStartIdx).trim();
+            } else {
+                int firstSpace = clean.indexOf(' ');
+                String firstWord = (firstSpace != -1) ? clean.substring(0, firstSpace).toLowerCase() : clean.toLowerCase();
+                String matchedVoice = matchVoiceName(firstWord);
+
+                if (matchedVoice != null) {
+                    voice = matchedVoice;
+                    clean = (firstSpace != -1) ? clean.substring(firstSpace + 1).trim() : "";
+                }
             }
 
             if (clean.isEmpty()) {
@@ -2340,44 +2498,120 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
     private String matchVoiceName(String name) {
         if (name == null) return null;
-        switch (name.toLowerCase()) {
-            case "demon":
-            case "демон":
-                return "demon";
+        String n = name.toLowerCase().replace("-", "_").trim();
+        switch (n) {
+            case "sidorovich":
+            case "торгаш":
+            case "торгаш_с_кордона":
+            case "кордон":
+            case "сидорович":
+            case "сидор":
+            case "сталкер":
+            case "trader":
+                return "sidorovich";
+
+            case "bandit":
+            case "бандит":
+            case "маслина":
+            case "чекибрики":
+            case "чёкибрики":
+            case "бандос":
+                return "bandit";
+
+            case "patrick":
+            case "розовая_звезда":
+            case "звезда":
+            case "патрик":
+            case "патрик_стар":
+            case "patrickstar":
+            case "star":
+                return "patrick";
+
+            case "spongebob":
+            case "морская_губка":
+            case "губка":
+            case "губка_боб":
+            case "спанч":
+            case "спанчбоб":
+            case "спанч_боб":
+            case "sponge":
+                return "spongebob";
+
+            case "georgian":
+            case "добрый_грузин":
+            case "грузин":
+            case "генацвале":
+            case "gruzin":
+                return "georgian";
+
+            case "katya":
+            case "эмоциональная_катя":
+            case "эмоциальная_катя":
+            case "катя":
+            case "эмокатя":
+                return "katya";
+
+            case "catgirl":
+            case "кошкодевочка":
+            case "кошко_девочка":
+            case "тян":
+            case "неко":
+            case "аниме_тян":
+            case "neko":
+                return "catgirl";
+
+            case "pudge":
+            case "мясник_с_хуком":
+            case "мясник":
+            case "пудж":
+            case "хук":
+            case "свежее_мясо":
+            case "butcher":
+                return "pudge";
+
+            case "navalny":
+            case "алексей_навальный":
+            case "навальный":
+            case "леха":
+            case "лёха":
+                return "navalny";
+
+            case "ut":
+            case "нереальный_турнир":
+            case "турнир":
+            case "анриал":
+            case "unreal":
+            case "tournament":
+                return "ut";
+
+            case "brainrot":
+            case "итальянский_брейнрот":
+            case "брейнрот":
+            case "итальянец":
+            case "italian":
+            case "bomboclat":
+                return "brainrot";
+
+            case "giant":
+            case "великан":
+            case "титан":
+            case "монстр":
+            case "гигант":
+                return "giant";
+
             case "chipmunk":
             case "бурундук":
             case "пискля":
             case "белка":
                 return "chipmunk";
-            case "giant":
-            case "великан":
-            case "титан":
-            case "монстр":
-                return "giant";
-            case "ghost":
-            case "призрак":
-            case "фантом":
-                return "ghost";
-            case "drunk":
-            case "пьяный":
-            case "бухой":
-                return "drunk";
-            case "goblin":
-            case "гоблин":
-            case "гном":
-                return "goblin";
-            case "announcer":
-            case "диктор":
-            case "мегафон":
-                return "announcer";
-            case "fast":
-            case "быстрый":
-            case "спидран":
-                return "fast";
-            case "slow":
-            case "медленный":
-            case "тягучий":
-                return "slow";
+
+            case "normal":
+            case "обычный":
+            case "чистый":
+            case "дефолт":
+            case "стандарт":
+                return "normal";
+
             default:
                 return null;
         }
@@ -2386,22 +2620,27 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private void sendTtsHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "TTS" + ChatColor.DARK_GRAY + "] " + ChatColor.GOLD + "Доступные голоса:");
         sender.sendMessage(ChatColor.YELLOW + "/tts <текст>" + ChatColor.GRAY + " — обычный чистый голос");
-        sender.sendMessage(ChatColor.YELLOW + "/tts demon <текст>" + ChatColor.GRAY + " — демон (демонический бас)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts chipmunk <текст>" + ChatColor.GRAY + " — бурундук (высокая пискля)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts giant <текст>" + ChatColor.GRAY + " — великан (рокочущий титан)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts ghost <текст>" + ChatColor.GRAY + " — призрак (мистический трепещущий голос)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts drunk <текст>" + ChatColor.GRAY + " — пьяный (плавающий смешной голос)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts goblin <текст>" + ChatColor.GRAY + " — гоблин (визгливый хриплый голос)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts announcer <текст>" + ChatColor.GRAY + " — диктор (громкоговоритель со звонком)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts fast <текст>" + ChatColor.GRAY + " — быстрый (ускоренная речь)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts slow <текст>" + ChatColor.GRAY + " — медленный (тягучий бас)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts торгаш <текст>" + ChatColor.GRAY + " — Торгаш с Кордона (Сидорович)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts бандит <текст>" + ChatColor.GRAY + " — Бандит (чики-брики)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts патрик <текст>" + ChatColor.GRAY + " — Розовая звезда (Патрик)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts спанчбоб <текст>" + ChatColor.GRAY + " — Морская губка (Спанч Боб)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts грузин <текст>" + ChatColor.GRAY + " — Добрый Грузин");
+        sender.sendMessage(ChatColor.YELLOW + "/tts катя <текст>" + ChatColor.GRAY + " — Эмоциональная Катя");
+        sender.sendMessage(ChatColor.YELLOW + "/tts кошкодевочка <текст>" + ChatColor.GRAY + " — КошкоДевочка (ня-тян)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts пудж <текст>" + ChatColor.GRAY + " — Мясник с хуком (Pudge)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts навальный <текст>" + ChatColor.GRAY + " — Алексей Навальный");
+        sender.sendMessage(ChatColor.YELLOW + "/tts турнир <текст>" + ChatColor.GRAY + " — Нереальный Турнир (Unreal Tournament)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts брейнрот <текст>" + ChatColor.GRAY + " — Итальянский брейнрот");
+        sender.sendMessage(ChatColor.YELLOW + "/tts великан <текст>" + ChatColor.GRAY + " — Великан (глубокий рокочущий бас)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts бурундук <текст>" + ChatColor.GRAY + " — Бурундук (высокая пискля)");
         sender.sendMessage(ChatColor.GOLD + "Настройка громкости:");
         sender.sendMessage(ChatColor.YELLOW + "/tts vol <0-100>" + ChatColor.GRAY + " — персональная громкость TTS для себя");
         if (isNplAdmin(sender)) {
-            sender.sendMessage(ChatColor.GOLD + "Управление доступом (для админов):");
-            sender.sendMessage(ChatColor.YELLOW + "/tts add <ник>" + ChatColor.GRAY + " — разрешить игроку использовать /tts");
+            sender.sendMessage(ChatColor.GOLD + "Управление (для админов):");
+            sender.sendMessage(ChatColor.YELLOW + "/tts add <ник>" + ChatColor.GRAY + " — разрешить игроку /tts");
             sender.sendMessage(ChatColor.YELLOW + "/tts rem <ник>" + ChatColor.GRAY + " — забрать разрешение на /tts");
-            sender.sendMessage(ChatColor.YELLOW + "/tts list" + ChatColor.GRAY + " — список разрешённых игроков");
+            sender.sendMessage(ChatColor.YELLOW + "/tts fishkey <ключ|off>" + ChatColor.GRAY + " — ключ Fish Audio API для нейро-озвучки");
+            sender.sendMessage(ChatColor.YELLOW + "/tts list" + ChatColor.GRAY + " — список игроков с доступом");
         }
     }
 
@@ -4247,11 +4486,15 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             if (args.length == 1) {
                 List<String> options = new ArrayList<>();
                 if (isNplAdmin(sender)) {
-                    options.addAll(Arrays.asList("add", "rem", "remove", "list", "voices", "help", "vol", "volume"));
+                    options.addAll(Arrays.asList("add", "rem", "remove", "list", "fishkey", "apikey", "model", "voices", "help", "vol", "volume"));
                 } else {
                     options.addAll(Arrays.asList("voices", "help", "vol", "volume"));
                 }
-                options.addAll(Arrays.asList("demon", "chipmunk", "giant", "ghost", "drunk", "goblin", "announcer", "fast", "slow"));
+                options.addAll(Arrays.asList(
+                        "торгаш", "бандит", "патрик", "спанчбоб", "грузин", "катя", "кошкодевочка", "пудж", "мясник", "навальный", "турнир", "брейнрот", "великан", "бурундук",
+                        "торгаш_с_кордона", "розовая_звезда", "морская_губка", "добрый_грузин", "эмоциональная_катя", "мясник_с_хуком", "алексей_навальный", "нереальный_турнир", "итальянский_брейнрот",
+                        "sidorovich", "bandit", "patrick", "spongebob", "georgian", "katya", "catgirl", "pudge", "navalny", "ut", "brainrot", "giant", "chipmunk"
+                ));
                 String current = args[0].toLowerCase();
                 List<String> matched = new ArrayList<>();
                 for (String opt : options) {
@@ -4265,6 +4508,12 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                     return Arrays.asList("0", "25", "50", "75", "100", "150");
                 }
                 if (isNplAdmin(sender)) {
+                    if (args[0].equalsIgnoreCase("fishkey") || args[0].equalsIgnoreCase("apikey")) {
+                        return Arrays.asList("status", "off");
+                    }
+                    if (args[0].equalsIgnoreCase("model")) {
+                        return Arrays.asList("sidorovich", "bandit", "patrick", "spongebob", "georgian", "katya", "catgirl", "pudge", "navalny", "ut", "brainrot");
+                    }
                     if (args[0].equalsIgnoreCase("add")) {
                         List<String> players = new ArrayList<>();
                         String current = args[1].toLowerCase();

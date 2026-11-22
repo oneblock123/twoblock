@@ -1,0 +1,16 @@
+name: TwoBlocksChat
+version: 1.0.8
+main: ru.twoblocks.chat.TwoBlocksChat
+api-version: '1.13'
+author: TwoBlocks
+description: TwoBlocks Server Utility and Player Management
+softdepend: [voicechat, Voicechat, SimpleVoiceChat]
+commands:
+  twoblockschat:
+    description: Reload plugin configuration
+  npl:
+    description: New player limitation management
+    aliases: [npllimit]
+  tts:
+    description: Text to speech voice broadcast
+    aliases: [ttsvoice]

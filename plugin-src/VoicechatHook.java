@@ -237,8 +237,22 @@ public class VoicechatHook implements VoicechatPlugin {
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                String encoded = URLEncoder.encode(message, "UTF-8");
-                byte[] mp3Bytes = fetchTtsAudio(encoded, "ru");
+                byte[] mp3Bytes = null;
+                boolean isNeuralAi = false;
+
+                // Try Fish Audio neural AI voice clone if API key is set and voice is one of the characters
+                if (!voiceType.equalsIgnoreCase("normal") && !voiceType.equalsIgnoreCase("giant") && !voiceType.equalsIgnoreCase("chipmunk")) {
+                    mp3Bytes = fetchFishAudio(message, voiceType);
+                    if (mp3Bytes != null && mp3Bytes.length > 512) {
+                        isNeuralAi = true;
+                    }
+                }
+
+                // If not using Fish Audio or if Fish Audio failed/offline, use Google TTS
+                if (mp3Bytes == null) {
+                    String encoded = URLEncoder.encode(message, "UTF-8");
+                    mp3Bytes = fetchTtsAudio(encoded, "ru");
+                }
 
                 if (mp3Bytes == null || mp3Bytes.length == 0) {
                     player.sendMessage(ChatColor.RED + "Не удалось получить аудио (ошибка всех TTS сервисов).");
@@ -251,7 +265,10 @@ public class VoicechatHook implements VoicechatPlugin {
                     return;
                 }
 
-                pcm = applyVoiceEffect(pcm, voiceType);
+                // Only apply DSP acoustic voice modifications if generated via Google TTS fallback
+                if (!isNeuralAi) {
+                    pcm = applyVoiceEffect(pcm, voiceType);
+                }
 
                 UUID channelId = player.getUniqueId();
 
@@ -368,6 +385,91 @@ public class VoicechatHook implements VoicechatPlugin {
         return null;
     }
 
+    private byte[] fetchFishAudio(String text, String voiceType) {
+        String apiKey = plugin.getFishAudioApiKey();
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            return null;
+        }
+        String modelId = plugin.getFishAudioModelId(voiceType);
+        if (modelId == null || modelId.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            URL url = new URL("https://api.fish.audio/v1/tts");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey.trim());
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 TwoBlocksChat/1.0");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(12000);
+            conn.setDoOutput(true);
+
+            String jsonPayload = "{\"text\":" + quoteJson(text) + ",\"reference_id\":" + quoteJson(modelId.trim()) + ",\"format\":\"mp3\"}";
+
+            try (java.io.OutputStream os = conn.getOutputStream()) {
+                os.write(jsonPayload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                os.flush();
+            }
+
+            int code = conn.getResponseCode();
+            if (code == 200) {
+                try (InputStream in = conn.getInputStream();
+                     ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    byte[] buf = new byte[4096];
+                    int r;
+                    while ((r = in.read(buf)) != -1) {
+                        out.write(buf, 0, r);
+                    }
+                    byte[] bytes = out.toByteArray();
+                    if (bytes.length > 512) {
+                        return bytes;
+                    }
+                }
+            } else {
+                try (InputStream err = conn.getErrorStream()) {
+                    if (err != null) {
+                        ByteArrayOutputStream errOut = new ByteArrayOutputStream();
+                        byte[] buf = new byte[1024];
+                        int r;
+                        while ((r = err.read(buf)) != -1) errOut.write(buf, 0, r);
+                        Bukkit.getLogger().warning("[TwoBlocksChat] Fish Audio HTTP " + code + ": " + errOut.toString(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Bukkit.getLogger().warning("[TwoBlocksChat] Fish Audio request failed (" + voiceType + "): " + t.getMessage());
+        }
+        return null;
+    }
+
+    private String quoteJson(String s) {
+        if (s == null) return "\"\"";
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\b': sb.append("\\b"); break;
+                case '\f': sb.append("\\f"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < ' ') {
+                        String t = "000" + Integer.toHexString(c);
+                        sb.append("\\u").append(t.substring(t.length() - 4));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        sb.append("\"");
+        return sb.toString();
+    }
+
     private short[] decodeMp3To48kMono(byte[] mp3Bytes, VoicechatServerApi api) {
         if (api != null) {
             try {
@@ -461,24 +563,32 @@ public class VoicechatHook implements VoicechatPlugin {
     private short[] applyVoiceEffect(short[] input, String voiceType) {
         if (input == null || input.length == 0 || voiceType == null) return input;
         switch (voiceType.toLowerCase()) {
-            case "demon":
-                return applyDemonEffect(input);
-            case "chipmunk":
-                return applyChipmunkEffect(input);
+            case "sidorovich":
+                return applySidorovichEffect(input);
+            case "bandit":
+                return applyBanditEffect(input);
+            case "patrick":
+                return applyPatrickEffect(input);
+            case "spongebob":
+                return applySpongebobEffect(input);
+            case "georgian":
+                return applyGeorgianEffect(input);
+            case "katya":
+                return applyKatyaEffect(input);
+            case "catgirl":
+                return applyCatgirlEffect(input);
+            case "pudge":
+                return applyPudgeEffect(input);
+            case "navalny":
+                return applyNavalnyEffect(input);
+            case "ut":
+                return applyUtEffect(input);
+            case "brainrot":
+                return applyBrainrotEffect(input);
             case "giant":
                 return applyGiantEffect(input);
-            case "ghost":
-                return applyGhostEffect(input);
-            case "drunk":
-                return applyDrunkEffect(input);
-            case "goblin":
-                return applyGoblinEffect(input);
-            case "announcer":
-                return applyAnnouncerEffect(input);
-            case "fast":
-                return applyPitchEffect(input, 1.35);
-            case "slow":
-                return applyPitchEffect(input, 0.78);
+            case "chipmunk":
+                return applyChipmunkEffect(input);
             default:
                 return input;
         }
@@ -490,32 +600,56 @@ public class VoicechatHook implements VoicechatPlugin {
         float pitch = 1.6f;
         if (voiceType != null) {
             switch (voiceType.toLowerCase()) {
-                case "demon":
-                    sound = Sound.ENTITY_WITHER_SPAWN;
+                case "sidorovich":
+                    sound = Sound.ENTITY_VILLAGER_TRADE;
+                    pitch = 0.8f;
+                    break;
+                case "bandit":
+                    sound = Sound.ITEM_CROSSBOW_SHOOT;
+                    pitch = 0.7f;
+                    break;
+                case "patrick":
+                    sound = Sound.ENTITY_SALMON_FLOP;
                     pitch = 0.6f;
                     break;
-                case "chipmunk":
-                    sound = Sound.ENTITY_BAT_TAKEOFF;
+                case "spongebob":
+                    sound = Sound.ENTITY_PUFFER_FISH_BLOW_UP;
+                    pitch = 1.8f;
+                    break;
+                case "georgian":
+                    sound = Sound.BLOCK_BELL_USE;
+                    pitch = 1.2f;
+                    break;
+                case "katya":
+                    sound = Sound.ENTITY_CAT_HISS;
+                    pitch = 1.5f;
+                    break;
+                case "catgirl":
+                    sound = Sound.ENTITY_CAT_PURREOW;
+                    pitch = 1.7f;
+                    break;
+                case "pudge":
+                    sound = Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR;
+                    pitch = 0.5f;
+                    break;
+                case "navalny":
+                    sound = Sound.BLOCK_NOTE_BLOCK_BELL;
+                    pitch = 1.4f;
+                    break;
+                case "ut":
+                    sound = Sound.ENTITY_LIGHTNING_BOLT_THUNDER;
+                    pitch = 1.6f;
+                    break;
+                case "brainrot":
+                    sound = Sound.ENTITY_PARROT_IMITATE_CREEPER;
                     pitch = 1.8f;
                     break;
                 case "giant":
                     sound = Sound.ENTITY_ENDER_DRAGON_GROWL;
                     pitch = 0.5f;
                     break;
-                case "ghost":
-                    sound = Sound.ENTITY_PHANTOM_BITE;
-                    pitch = 1.3f;
-                    break;
-                case "drunk":
-                    sound = Sound.ENTITY_WANDERING_TRADER_DRINK_POTION;
-                    pitch = 1.0f;
-                    break;
-                case "goblin":
-                    sound = Sound.ENTITY_EVOKER_CELEBRATE;
-                    pitch = 1.7f;
-                    break;
-                case "announcer":
-                    sound = Sound.BLOCK_NOTE_BLOCK_CHIME;
+                case "chipmunk":
+                    sound = Sound.ENTITY_BAT_TAKEOFF;
                     pitch = 1.8f;
                     break;
             }
@@ -529,38 +663,45 @@ public class VoicechatHook implements VoicechatPlugin {
         short[] output = new short[input.length];
         for (int i = 0; i < input.length; i++) {
             int val = (int) (input[i] * volume);
-            if (val > 32767) val = 32767;
-            else if (val < -32768) val = -32768;
-            output[i] = (short) val;
+            output[i] = clamp(val);
         }
         return output;
     }
 
-    private short[] applyDemonEffect(short[] input) {
+    private static short clamp(int val) {
+        if (val > 32767) return 32767;
+        if (val < -32768) return -32768;
+        return (short) val;
+    }
+
+    private short[] applySidorovichEffect(short[] input) {
         if (input == null || input.length == 0) return input;
         try {
-            double pitchFactor = 0.68;
-            int newLength = (int) Math.round(input.length / pitchFactor);
-            short[] pitched = new short[newLength];
+            short[] pitched = applyPitchEffect(input, 0.82);
+            int len = pitched.length;
 
-            for (int i = 0; i < newLength; i++) {
-                double srcPos = i * pitchFactor;
-                int idx0 = (int) Math.floor(srcPos);
-                int idx1 = Math.min(idx0 + 1, input.length - 1);
-                double frac = srcPos - idx0;
-                pitched[i] = (short) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
+            short[] filtered = new short[len];
+            double hpY = 0;
+            double prevX = 0;
+            double lpY = 0;
+            for (int i = 0; i < len; i++) {
+                double x = pitched[i];
+                hpY = 0.93 * (hpY + x - prevX);
+                prevX = x;
+                lpY = lpY + 0.36 * (hpY - lpY);
+
+                int val = (int) (lpY * 1.7);
+                if (val > 18000) val = 18000 + (val - 18000) / 3;
+                else if (val < -18000) val = -18000 + (val + 18000) / 3;
+                filtered[i] = clamp(val);
             }
 
-            int delaySamples = (int) (48000 * 0.085);
-            short[] output = new short[newLength];
-
-            for (int i = 0; i < newLength; i++) {
-                int dry = pitched[i];
-                int wet = (i >= delaySamples) ? (int) (pitched[i - delaySamples] * 0.42) : 0;
-                int combined = dry + wet;
-                if (combined > 32767) combined = 32767;
-                else if (combined < -32768) combined = -32768;
-                output[i] = (short) combined;
+            int delaySamples = (int) (48000 * 0.042);
+            short[] output = new short[len + delaySamples];
+            for (int i = 0; i < output.length; i++) {
+                int dry = (i < len) ? filtered[i] : 0;
+                int wet = (i >= delaySamples && (i - delaySamples) < len) ? (int) (filtered[i - delaySamples] * 0.28) : 0;
+                output[i] = clamp(dry + wet);
             }
             return output;
         } catch (Throwable ignored) {
@@ -568,19 +709,220 @@ public class VoicechatHook implements VoicechatPlugin {
         }
     }
 
-    private short[] applyChipmunkEffect(short[] input) {
+    private short[] applyBanditEffect(short[] input) {
         if (input == null || input.length == 0) return input;
         try {
-            double pitchFactor = 1.55;
-            int newLength = (int) Math.round(input.length / pitchFactor);
-            short[] output = new short[newLength];
+            short[] pitched = applyPitchEffect(input, 0.89);
+            int len = pitched.length;
 
-            for (int i = 0; i < newLength; i++) {
-                double srcPos = i * pitchFactor;
-                int idx0 = (int) Math.floor(srcPos);
-                int idx1 = Math.min(idx0 + 1, input.length - 1);
-                double frac = srcPos - idx0;
-                output[i] = (short) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
+            int combDelay = (int) (48000 * 0.020);
+            short[] output = new short[len + combDelay];
+            for (int i = 0; i < output.length; i++) {
+                int dry = (i < len) ? pitched[i] : 0;
+                int wet = (i >= combDelay && (i - combDelay) < len) ? (int) (output[i - combDelay] * 0.38) : 0;
+                int val = dry + wet;
+                if (val > 15000) val = 15000 + (val - 15000) / 3;
+                else if (val < -15000) val = -15000 + (val + 15000) / 3;
+                output[i] = clamp((int) (val * 1.15));
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyPatrickEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 0.72);
+            int len = pitched.length;
+
+            short[] output = new short[len];
+            double lpY = 0;
+            for (int i = 0; i < len; i++) {
+                lpY = lpY + 0.17 * (pitched[i] - lpY);
+                int val = (int) (lpY * 1.55);
+                output[i] = clamp(val);
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applySpongebobEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 1.44);
+            int len = pitched.length;
+
+            short[] output = new short[len];
+            double twoPiF = 2.0 * Math.PI * 8.5 / 48000.0;
+            double hpY = 0;
+            double prevX = 0;
+
+            for (int i = 0; i < len; i++) {
+                double trem = 0.68 + 0.32 * Math.sin(i * twoPiF);
+                double x = pitched[i] * trem;
+                hpY = 0.91 * (hpY + x - prevX);
+                prevX = x;
+                output[i] = clamp((int) (x * 0.7 + hpY * 0.6));
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyGeorgianEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 0.87);
+            int len = pitched.length;
+
+            int d1 = (int) (48000 * 0.032);
+            int d2 = (int) (48000 * 0.062);
+            short[] output = new short[len + d2];
+
+            for (int i = 0; i < output.length; i++) {
+                int dry = (i < len) ? pitched[i] : 0;
+                int echo1 = (i >= d1 && (i - d1) < len) ? (int) (pitched[i - d1] * 0.22) : 0;
+                int echo2 = (i >= d2 && (i - d2) < len) ? (int) (pitched[i - d2] * 0.15) : 0;
+                int val = dry + echo1 + echo2;
+                output[i] = clamp((int) (val * 1.1));
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyKatyaEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 1.37);
+            int len = pitched.length;
+
+            short[] output = new short[len];
+            double twoPiF = 2.0 * Math.PI * 6.2 / 48000.0;
+
+            for (int i = 0; i < len; i++) {
+                double trem = 0.74 + 0.26 * Math.sin(i * twoPiF);
+                int val = (int) (pitched[i] * trem * 1.35);
+                if (val > 22000) val = 22000 + (val - 22000) / 4;
+                else if (val < -22000) val = -22000 + (val + 22000) / 4;
+                output[i] = clamp(val);
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyCatgirlEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 1.54);
+            int len = pitched.length;
+
+            int chorusDelay = (int) (48000 * 0.013);
+            short[] output = new short[len + chorusDelay];
+
+            for (int i = 0; i < output.length; i++) {
+                int dry = (i < len) ? pitched[i] : 0;
+                int wet = (i >= chorusDelay && (i - chorusDelay) < len) ? (int) (pitched[i - chorusDelay] * 0.32) : 0;
+                output[i] = clamp((int) ((dry + wet) * 1.15));
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyPudgeEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 0.60);
+            int len = pitched.length;
+
+            int d = (int) (48000 * 0.070);
+            short[] output = new short[len + d];
+
+            for (int i = 0; i < output.length; i++) {
+                int dry = (i < len) ? pitched[i] : 0;
+                int wet = (i >= d && (i - d) < len) ? (int) (pitched[i - d] * 0.44) : 0;
+                int val = dry + wet;
+                if (val > 14000) val = 14000 + (val - 14000) / 4;
+                else if (val < -14000) val = -14000 + (val + 14000) / 4;
+                output[i] = clamp((int) (val * 1.4));
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyNavalnyEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 1.04);
+            int len = pitched.length;
+
+            int slapDelay = (int) (48000 * 0.095);
+            short[] output = new short[len + slapDelay];
+
+            for (int i = 0; i < output.length; i++) {
+                int dry = (i < len) ? pitched[i] : 0;
+                int echo = (i >= slapDelay && (i - slapDelay) < len) ? (int) (pitched[i - slapDelay] * 0.24) : 0;
+                int val = (int) (dry * 1.25) + echo;
+                output[i] = clamp(val);
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyUtEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 0.64);
+            int len = pitched.length;
+
+            int d1 = (int) (48000 * 0.090);
+            int d2 = (int) (48000 * 0.175);
+            short[] output = new short[len + d2];
+
+            for (int i = 0; i < output.length; i++) {
+                int dry = (i < len) ? pitched[i] : 0;
+                int echo1 = (i >= d1 && (i - d1) < len) ? (int) (pitched[i - d1] * 0.38) : 0;
+                int echo2 = (i >= d2 && (i - d2) < len) ? (int) (pitched[i - d2] * 0.24) : 0;
+                int val = dry + echo1 + echo2;
+                if (val > 20000) val = 20000 + (val - 20000) / 3;
+                else if (val < -20000) val = -20000 + (val + 20000) / 3;
+                output[i] = clamp((int) (val * 1.35));
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyBrainrotEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            short[] pitched = applyPitchEffect(input, 1.28);
+            int len = pitched.length;
+
+            short[] output = new short[len];
+            double twoPiF = 2.0 * Math.PI * 12.0 / 48000.0;
+
+            for (int i = 0; i < len; i++) {
+                double wobble = 0.80 + 0.20 * Math.sin(i * twoPiF);
+                int val = (int) (pitched[i] * wobble * 1.5);
+                if (val > 16000) val = 16000 + (val - 16000) / 3;
+                else if (val < -16000) val = -16000 + (val + 16000) / 3;
+                output[i] = clamp(val);
             }
             return output;
         } catch (Throwable ignored) {
@@ -604,54 +946,12 @@ public class VoicechatHook implements VoicechatPlugin {
             }
 
             int delaySamples = (int) (48000 * 0.12);
-            short[] output = new short[newLength];
-
-            for (int i = 0; i < newLength; i++) {
-                int dry = pitched[i];
-                int wet = (i >= delaySamples) ? (int) (pitched[i - delaySamples] * 0.48) : 0;
-                int combined = dry + wet;
-                if (combined > 32767) combined = 32767;
-                else if (combined < -32768) combined = -32768;
-                output[i] = (short) combined;
-            }
-            return output;
-        } catch (Throwable ignored) {
-            return input;
-        }
-    }
-
-    private short[] applyGhostEffect(short[] input) {
-        if (input == null || input.length == 0) return input;
-        try {
-            double pitchFactor = 1.14;
-            int newLength = (int) Math.round(input.length / pitchFactor);
-            short[] pitched = new short[newLength];
-
-            for (int i = 0; i < newLength; i++) {
-                double srcPos = i * pitchFactor;
-                int idx0 = (int) Math.floor(srcPos);
-                int idx1 = Math.min(idx0 + 1, input.length - 1);
-                double frac = srcPos - idx0;
-                pitched[i] = (short) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
-            }
-
-            int delaySamples = (int) (48000 * 0.11);
             short[] output = new short[newLength + delaySamples];
-            double twoPiF = 2.0 * Math.PI * 6.2 / 48000.0;
 
             for (int i = 0; i < output.length; i++) {
-                int dry = 0;
-                if (i < newLength) {
-                    double trem = 0.65 + 0.35 * Math.sin(i * twoPiF);
-                    dry = (int) (pitched[i] * trem);
-                }
-                int wet = (i >= delaySamples && (i - delaySamples) < newLength)
-                        ? (int) (pitched[i - delaySamples] * 0.38)
-                        : 0;
-                int val = dry + wet;
-                if (val > 32767) val = 32767;
-                else if (val < -32768) val = -32768;
-                output[i] = (short) val;
+                int dry = (i < newLength) ? pitched[i] : 0;
+                int wet = (i >= delaySamples && (i - delaySamples) < newLength) ? (int) (pitched[i - delaySamples] * 0.48) : 0;
+                output[i] = clamp(dry + wet);
             }
             return output;
         } catch (Throwable ignored) {
@@ -659,82 +959,9 @@ public class VoicechatHook implements VoicechatPlugin {
         }
     }
 
-    private short[] applyDrunkEffect(short[] input) {
+    private short[] applyChipmunkEffect(short[] input) {
         if (input == null || input.length == 0) return input;
-        try {
-            double twoPiF = 2.0 * Math.PI * 1.3 / 48000.0;
-            int estimatedLen = (int) (input.length * 1.15);
-            short[] temp = new short[estimatedLen + 4800];
-            double srcPos = 0;
-            int outIdx = 0;
-            while (srcPos < input.length - 1 && outIdx < temp.length) {
-                int idx0 = (int) Math.floor(srcPos);
-                int idx1 = Math.min(idx0 + 1, input.length - 1);
-                double frac = srcPos - idx0;
-                temp[outIdx++] = (short) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
-                double currentPitch = 0.90 + 0.16 * Math.sin(outIdx * twoPiF);
-                srcPos += currentPitch;
-            }
-            short[] output = new short[outIdx];
-            System.arraycopy(temp, 0, output, 0, outIdx);
-            return output;
-        } catch (Throwable ignored) {
-            return input;
-        }
-    }
-
-    private short[] applyGoblinEffect(short[] input) {
-        if (input == null || input.length == 0) return input;
-        try {
-            double pitchFactor = 1.35;
-            int newLength = (int) Math.round(input.length / pitchFactor);
-            short[] output = new short[newLength];
-
-            for (int i = 0; i < newLength; i++) {
-                double srcPos = i * pitchFactor;
-                int idx0 = (int) Math.floor(srcPos);
-                int idx1 = Math.min(idx0 + 1, input.length - 1);
-                double frac = srcPos - idx0;
-                int val = (int) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
-
-                if (val > 10000) {
-                    val = 10000 + (val - 10000) / 2;
-                } else if (val < -10000) {
-                    val = -10000 + (val + 10000) / 2;
-                }
-                val = (int) (val * 1.25);
-                if (val > 32767) val = 32767;
-                else if (val < -32768) val = -32768;
-                output[i] = (short) val;
-            }
-            return output;
-        } catch (Throwable ignored) {
-            return input;
-        }
-    }
-
-    private short[] applyAnnouncerEffect(short[] input) {
-        if (input == null || input.length == 0) return input;
-        try {
-            short[] output = new short[input.length];
-            double hpY = 0;
-            double prevX = 0;
-            double lpY = 0;
-            for (int i = 0; i < input.length; i++) {
-                double x = input[i];
-                hpY = 0.94 * (hpY + x - prevX);
-                prevX = x;
-                lpY = lpY + 0.35 * (hpY - lpY);
-
-                int val = (int) (lpY * 1.9);
-                if (val > 24000) val = 24000;
-                else if (val < -24000) val = -24000;
-                output[i] = (short) val;
-            }
-            return output;
-        } catch (Throwable ignored) {
-            return input;
-        }
+        return applyPitchEffect(input, 1.55);
     }
 
     private short[] applyPitchEffect(short[] input, double pitchFactor) {
