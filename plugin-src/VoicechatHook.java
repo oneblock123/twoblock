@@ -309,8 +309,6 @@ public class VoicechatHook implements VoicechatPlugin {
                     player.sendMessage(ChatColor.YELLOW + "[Предупреждение] Вы не подключены к Voice Chat каналу сервера.");
                 }
 
-                String prefix = isDemon ? ChatColor.DARK_RED + "☠ [DEMON] " : ChatColor.DARK_AQUA + "» ";
-                player.sendMessage(prefix + ChatColor.WHITE + message);
                 player.playSound(player.getLocation(), isDemon ? Sound.ENTITY_WITHER_SPAWN : Sound.UI_BUTTON_CLICK, 0.4f, isDemon ? 0.6f : 1.6f);
 
             } catch (Throwable t) {
