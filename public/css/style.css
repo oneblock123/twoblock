@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 
 :root {
-  --bg-sunset: url('../twoblocks-bg.jpg?v=20261122_4k');
+  --bg-sunset: url('../twoblocks-bg.jpg?v=20261122_winter_4k');
   --glass-bg: rgba(45, 45, 48, 0.72);
   --glass-bg-hover: rgba(58, 58, 62, 0.82);
   --glass-bg-active: rgba(35, 35, 38, 0.92);
