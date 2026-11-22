@@ -2083,8 +2083,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             if (player == null || (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z")))) {
                 return;
             }
-            if (message == null || message.trim().isEmpty()) {
-                player.sendMessage(ChatColor.RED + "Использование: /tts [demon/демон] <сообщение>");
+            if (message == null || message.trim().isEmpty() || message.trim().equalsIgnoreCase("help") || message.trim().equalsIgnoreCase("list")) {
+                sendTtsHelp(player);
                 return;
             }
 
@@ -2097,16 +2097,20 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             ttsCooldowns.put(player.getUniqueId(), now);
 
             String clean = message.trim();
-            boolean isDemon = false;
-            String lower = clean.toLowerCase();
-            if (lower.startsWith("demon ") || lower.startsWith("демон ")) {
-                isDemon = true;
-                int space = clean.indexOf(' ');
-                clean = (space != -1) ? clean.substring(space + 1).trim() : "";
+            String voice = "normal";
+
+            int firstSpace = clean.indexOf(' ');
+            String firstWord = (firstSpace != -1) ? clean.substring(0, firstSpace).toLowerCase() : clean.toLowerCase();
+            String matchedVoice = matchVoiceName(firstWord);
+
+            if (matchedVoice != null) {
+                voice = matchedVoice;
+                clean = (firstSpace != -1) ? clean.substring(firstSpace + 1).trim() : "";
             }
 
             if (clean.isEmpty()) {
-                player.sendMessage(ChatColor.RED + "Использование: /tts demon <сообщение>");
+                player.sendMessage(ChatColor.RED + "Использование: /tts " + (voice.equals("normal") ? "" : voice + " ") + "<сообщение>");
+                player.sendMessage(ChatColor.GRAY + "Напишите " + ChatColor.YELLOW + "/tts help" + ChatColor.GRAY + " для списка всех голосов.");
                 return;
             }
 
@@ -2124,9 +2128,69 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 return;
             }
 
-            voicechatHook.playTts(player, clean, isDemon);
+            voicechatHook.playTts(player, clean, voice);
         } catch (Throwable ignored) {
         }
+    }
+
+    private String matchVoiceName(String name) {
+        if (name == null) return null;
+        switch (name.toLowerCase()) {
+            case "demon":
+            case "демон":
+                return "demon";
+            case "robot":
+            case "робот":
+            case "киборг":
+                return "robot";
+            case "chipmunk":
+            case "бурундук":
+            case "пискля":
+            case "белка":
+                return "chipmunk";
+            case "giant":
+            case "великан":
+            case "титан":
+            case "монстр":
+                return "giant";
+            case "radio":
+            case "рация":
+            case "спецназ":
+                return "radio";
+            case "echo":
+            case "эхо":
+            case "пещера":
+                return "echo";
+            case "anime":
+            case "аниме":
+            case "японка":
+                return "anime";
+            case "fast":
+            case "быстрый":
+            case "спидран":
+            case "рэпер":
+                return "fast";
+            case "slow":
+            case "медленный":
+            case "пьяный":
+                return "slow";
+            default:
+                return null;
+        }
+    }
+
+    private void sendTtsHelp(CommandSender sender) {
+        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "TTS" + ChatColor.DARK_GRAY + "] " + ChatColor.GOLD + "Доступные голоса:");
+        sender.sendMessage(ChatColor.YELLOW + "/tts <текст>" + ChatColor.GRAY + " — обычный чистый голос");
+        sender.sendMessage(ChatColor.YELLOW + "/tts demon <текст>" + ChatColor.GRAY + " — демон (демонический бас)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts robot <текст>" + ChatColor.GRAY + " — робот (металлический киборг)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts chipmunk <текст>" + ChatColor.GRAY + " — бурундук (высокая пискля)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts giant <текст>" + ChatColor.GRAY + " — великан (рокочущий титан)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts radio <текст>" + ChatColor.GRAY + " — рация (переговоры спецназа)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts echo <текст>" + ChatColor.GRAY + " — эхо (звук собора/пещеры)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts anime <текст>" + ChatColor.GRAY + " — аниме (японский голос)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts fast <текст>" + ChatColor.GRAY + " — быстрый (ускоренная речь)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts slow <текст>" + ChatColor.GRAY + " — медленный (тягучий бас)");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -3912,6 +3976,20 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (alias.equalsIgnoreCase("tts") || alias.equalsIgnoreCase("ттс")) {
+            if (!isNplAdmin(sender)) {
+                return Collections.emptyList();
+            }
+            if (args.length == 1) {
+                List<String> voices = Arrays.asList("demon", "robot", "chipmunk", "giant", "radio", "echo", "anime", "fast", "slow", "help");
+                String current = args[0].toLowerCase();
+                List<String> matched = new ArrayList<>();
+                for (String v : voices) {
+                    if (v.startsWith(current)) {
+                        matched.add(v);
+                    }
+                }
+                return matched;
+            }
             return Collections.emptyList();
         }
         if (alias.equalsIgnoreCase("npl") || alias.equalsIgnoreCase("нпл")) {
@@ -3927,7 +4005,9 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 }
                 return list;
             } else if (args.length == 2) {
-                return Arrays.asList("on", "off", "reset", "toggle", "info");
+                return Arrays.asList("on", "off", "chat", "reset", "toggle", "info");
+            } else if (args.length == 3 && args[1].equalsIgnoreCase("chat")) {
+                return Arrays.asList("30s", "1m", "5m", "10m", "1h", "0");
             } else if (args.length == 3 && args[1].equalsIgnoreCase("toggle")) {
                 return Arrays.asList("chat", "place", "break", "craft", "use", "interact", "pvp", "chest", "anvil", "entity_interact", "command");
             }
