@@ -88,8 +88,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalCopySwlBtn = document.getElementById('modalCopySwlBtn');
   const deleteAppBtn = document.getElementById('deleteAppBtn');
 
-  async function loadApplications() {
-    if (!client) return;
+  // Try fast session cache immediately for 0ms initial load
+  try {
+    const cached = sessionStorage.getItem('twoblocks_apps_cache');
+    if (cached) {
+      applications = JSON.parse(cached);
+      updateStats();
+      renderList();
+    }
+  } catch (e) {}
+
+  let isLoading = false;
+  async function loadApplications(isBackground = false) {
+    if (!client || isLoading) return;
+    isLoading = true;
+    if (!isBackground && applications.length === 0 && appsList) {
+      appsList.innerHTML = `<div class="empty-state-card" style="padding: 40px;"><div style="font-size: 32px; margin-bottom: 8px;">⏳</div><div style="font-weight: 700; color: #fff;">Загрузка базы заявок...</div></div>`;
+    }
     try {
       const { data, error } = await client
         .from('applications')
@@ -98,16 +113,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (error) throw error;
       applications = data || [];
+      try {
+        sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications));
+      } catch (e) {}
       updateStats();
       renderList();
     } catch (err) {
       console.error("Supabase load error:", err);
-      if (appsList) {
+      if (!isBackground && applications.length === 0 && appsList) {
         appsList.innerHTML = `<div class="empty-state-card">Ошибка загрузки базы: ${err.message || err}</div>`;
       }
+    } finally {
+      isLoading = false;
     }
   }
 
+  let realtimeTimer = null;
   function startSupabaseListener() {
     if (listenerStarted || !isAuthenticated || !client) return;
     listenerStarted = true;
@@ -116,8 +137,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     client
       .channel('admin_applications_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => {
-        loadApplications();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, (payload) => {
+        // Fast instant handling for new incoming application
+        if (payload.eventType === 'INSERT' && payload.new) {
+          if (!applications.some(a => a.id === payload.new.id)) {
+            applications.unshift(payload.new);
+            try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+            updateStats();
+            renderList();
+          }
+          return;
+        }
+        // Debounce other events quietly in background without freezing
+        clearTimeout(realtimeTimer);
+        realtimeTimer = setTimeout(() => {
+          loadApplications(true);
+        }, 1500);
       })
       .subscribe();
   }
@@ -186,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="app-capsule-card" data-id="${app.id}">
           <!-- Left: Avatar Circle -->
           <div class="app-avatar-circle">
-            <img src="${avatarUrl}" alt="${escapeHtml(app.nickname)}" onerror="this.onerror=null; this.src='https://minotar.net/helm/${encodeURIComponent(app.nickname || 'Steve')}/44.png';">
+            <img src="${avatarUrl}" loading="lazy" decoding="async" alt="${escapeHtml(app.nickname)}" onerror="this.onerror=null; this.src='https://minotar.net/helm/${encodeURIComponent(app.nickname || 'Steve')}/44.png';">
           </div>
 
           <!-- Middle: Info Pill -->
@@ -343,6 +378,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function approveApp(id) {
     if (!client) return;
+    const idx = applications.findIndex(a => a.id === id);
+    if (idx === -1) return;
+
+    const oldStatus = applications[idx].status;
+    applications[idx].status = 'approved';
+    try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+
+    // Instant UI update in 0ms!
+    updateStats();
+    renderList();
+
+    if (activeApp && activeApp.id === id) {
+      activeApp.status = 'approved';
+      openDetails(id);
+    }
+
     try {
       const { error } = await client
         .from('applications')
@@ -350,20 +401,35 @@ document.addEventListener('DOMContentLoaded', () => {
         .eq('id', id);
 
       if (error) throw error;
-
-      if (activeApp && activeApp.id === id) {
-        activeApp.status = 'approved';
-        openDetails(id);
-      }
-      loadApplications();
     } catch (err) {
       console.error(err);
+      // Revert if error
+      applications[idx].status = oldStatus;
+      try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+      updateStats();
+      renderList();
       alert('Ошибка при принятии заявки: ' + (err.message || err));
     }
   }
 
   async function deleteApp(id) {
     if (!client) return;
+    const idx = applications.findIndex(a => a.id === id);
+    if (idx === -1) return;
+
+    const removedApp = applications[idx];
+    applications.splice(idx, 1);
+    try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+
+    if (activeApp && activeApp.id === id) {
+      if (detailModal) detailModal.classList.remove('active');
+      activeApp = null;
+    }
+
+    // Instant UI update in 0ms!
+    updateStats();
+    renderList();
+
     try {
       const { error } = await client
         .from('applications')
@@ -371,14 +437,12 @@ document.addEventListener('DOMContentLoaded', () => {
         .eq('id', id);
 
       if (error) throw error;
-
-      if (activeApp && activeApp.id === id) {
-        if (detailModal) detailModal.classList.remove('active');
-        activeApp = null;
-      }
-      loadApplications();
     } catch (err) {
       console.error(err);
+      applications.splice(idx, 0, removedApp);
+      try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+      updateStats();
+      renderList();
       alert('Ошибка при удалении заявки: ' + (err.message || err));
     }
   }
