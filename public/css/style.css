@@ -1,24 +1,24 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 
 :root {
-  --bg-sunset: url('../sunset-bg.jpg?v=20261117_true4k_orig');
-  --glass-bg: rgba(185, 155, 215, 0.45);
-  --glass-bg-hover: rgba(200, 172, 230, 0.58);
-  --glass-bg-active: rgba(165, 130, 200, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-border-focus: #c084fc;
-  --glass-shadow: none;
+  --bg-sunset: url('../twoblocks-bg.jpg?v=20261122_4k');
+  --glass-bg: rgba(45, 45, 48, 0.72);
+  --glass-bg-hover: rgba(58, 58, 62, 0.82);
+  --glass-bg-active: rgba(35, 35, 38, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-border-focus: #a855f7;
+  --glass-shadow: 0 12px 34px rgba(0, 0, 0, 0.48);
 
-  --accent-purple: #7c3aed;
-  --accent-purple-glow: rgba(124, 58, 237, 0.4);
+  --accent-purple: #9333ea;
+  --accent-purple-glow: rgba(147, 51, 234, 0.45);
   --accent-gold: #f59e0b;
   --accent-green: #22c55e;
   --accent-red: #ef4444;
 
   --text-pure: #ffffff;
-  --text-main: #f5f2fa;
-  --text-sub: #e2d9f3;
-  --text-muted: #bda8d9;
+  --text-main: #f3f4f6;
+  --text-sub: #d1d5db;
+  --text-muted: #9ca3af;
 
   --font-logo: 'Press Start 2P', monospace;
   --font-main: 'Outfit', 'Inter', -apple-system, sans-serif;
@@ -38,7 +38,7 @@ body {
   min-height: 100vh;
   font-family: var(--font-main);
   color: var(--text-main);
-  background: var(--bg-sunset) center center / cover no-repeat fixed;
+  background: #110d18 var(--bg-sunset) center center / cover no-repeat fixed;
   position: relative;
   overflow-x: hidden;
 }
@@ -53,143 +53,121 @@ body::before {
   z-index: 1;
   display: flex;
   justify-content: space-between;
-  align-items: stretch;
-  gap: 36px;
-  max-width: 1440px;
+  align-items: flex-start;
+  gap: 40px;
+  max-width: 1360px;
   min-height: 100vh;
   margin: 0 auto;
   padding: 40px 32px;
 }
 
 /* ========================================================
-   LEFT COLUMN (BRAND, 3 SQUARE ADMIN CARDS, RULES BUTTON)
+   LEFT COLUMN (BRAND LOGO, SOCIALS, TWITCH, RULES & COPY IP)
    ======================================================== */
 .layout-left {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  min-height: calc(100vh - 80px);
   position: sticky;
   top: 40px;
-  max-width: 580px;
+  max-width: 540px;
 }
 
-.left-top-group {
+.left-main-stack {
   display: flex;
   flex-direction: column;
   gap: 24px;
-}
-
-/* TwoBlocks Logo Capsule */
-.brand-capsule {
-  display: inline-flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 32px;
-  background: var(--glass-bg);
-  border: 1.5px solid var(--glass-border);
-  border-radius: 40px;
-  box-shadow: none;
-  width: fit-content;
-  transition: transform 0.25s ease, background 0.25s ease;
-}
-
-.brand-capsule:hover {
-  transform: translateY(-2px);
-  background: var(--glass-bg-hover);
-}
-
-.brand-icon-box {
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.brand-icon-box img {
-  width: 28px;
-  height: 28px;
-  image-rendering: pixelated;
-}
-
-.brand-text-wrap {
-  display: flex;
-  flex-direction: column;
-}
-
-.brand-logo-text {
-  font-family: var(--font-logo);
-  font-size: 20px;
-  color: var(--text-pure);
-  text-shadow: 2px 2px 0px rgba(40, 15, 65, 0.6), 0 0 16px rgba(230, 200, 255, 0.5);
-  letter-spacing: 1px;
-}
-
-.brand-sub-text {
-  font-size: 13px;
-  color: var(--text-sub);
-  margin-top: 3px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-}
-
-/* 3 Rounded Square Cards ("Добрые админы" и др.) */
-.admin-cards-grid {
-  display: flex;
-  gap: 18px;
   width: 100%;
 }
 
-.admin-square-card {
-  flex: 1;
-  aspect-ratio: 1 / 1;
-  min-height: 125px;
-  background: var(--glass-bg);
-  border: 1.5px solid var(--glass-border);
-  border-radius: 28px;
-  padding: 16px 14px;
-  display: flex;
-  flex-direction: column;
+/* 1. TwoBlocks Stone Logo Capsule with Drop Shadow */
+.brand-logo-card {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  box-shadow: none;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.25s ease, border-color 0.25s ease;
-  cursor: default;
+  padding: 18px 32px;
+  background: var(--glass-bg);
+  border: 1.5px solid var(--glass-border);
+  border-radius: 30px;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  width: 320px;
+  max-width: 100%;
+  box-sizing: border-box;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-.admin-square-card:hover {
-  transform: translateY(-5px) scale(1.03);
-  background: var(--glass-bg-hover);
-  border-color: rgba(255, 255, 255, 0.6);
+.brand-logo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
-.admin-card-icon {
-  font-size: 28px;
-  margin-bottom: 8px;
+.brand-logo-img {
+  height: 48px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.65));
+  display: block;
 }
 
-.admin-card-title {
-  font-size: 14.5px;
-  font-weight: 700;
-  color: var(--text-pure);
-  margin-bottom: 4px;
-  line-height: 1.2;
+/* 2. Two Circular Social Buttons: Telegram & Discord */
+.social-circles-row {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  padding-left: 14px;
 }
 
-.admin-card-desc {
-  font-size: 11.5px;
-  color: var(--text-sub);
-  line-height: 1.3;
+.social-circle-btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  border: 1.5px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  text-decoration: none;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
 }
 
-/* ========================================================
-   TWITCH STREAM PLAYER CAPSULE
-   ======================================================== */
+.social-circle-btn:hover {
+  transform: translateY(-4px) scale(1.08);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.65);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.social-circle-btn.tg-circle:hover {
+  background: rgba(36, 161, 222, 0.35);
+  color: #38bdf8;
+  box-shadow: 0 16px 38px rgba(36, 161, 222, 0.45);
+}
+
+.social-circle-btn.ds-circle:hover {
+  background: rgba(88, 101, 242, 0.35);
+  color: #a5b4fc;
+  box-shadow: 0 16px 38px rgba(88, 101, 242, 0.45);
+}
+
+.social-svg-icon {
+  width: 36px;
+  height: 36px;
+  transition: transform 0.2s ease;
+}
+
+.social-circle-btn:hover .social-svg-icon {
+  transform: scale(1.1);
+}
+
+/* 3. Twitch Stream Player Capsule */
 .twitch-capsule {
   width: 100%;
   background: var(--glass-bg);
@@ -200,12 +178,15 @@ body::before {
   flex-direction: column;
   gap: 12px;
   box-sizing: border-box;
-  transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .twitch-capsule:hover {
-  background: var(--glass-bg-hover);
-  border-color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6);
 }
 
 .twitch-header {
@@ -259,10 +240,10 @@ body::before {
   width: 100%;
   aspect-ratio: 16 / 9;
   min-height: 240px;
-  background: rgba(20, 10, 30, 0.6);
+  background: rgba(15, 15, 20, 0.7);
   border-radius: 20px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
 }
 
@@ -273,70 +254,116 @@ body::before {
   display: block;
 }
 
-/* Bottom Left Actions: Rules Button & Music Toggle */
-.left-bottom-group {
+/* 4. Bottom Row: Circular Rules Button + Adjacent Pill Copy IP Button + Music Toggle */
+.bottom-actions-row {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 30px;
+  gap: 16px;
+  margin-top: 4px;
 }
 
-.rules-capsule-btn {
+.action-circle-btn {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  border: 1.5px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  outline: none;
+  position: relative;
+  font-size: 20px;
+}
+
+.action-circle-btn:hover {
+  transform: translateY(-3px) scale(1.06);
+  background: var(--glass-bg-hover);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6);
+}
+
+.action-circle-btn:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.action-icon-svg {
+  width: 26px;
+  height: 26px;
+}
+
+.btn-tooltip {
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 15, 20, 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.action-circle-btn:hover .btn-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(2px);
+}
+
+.copy-ip-pill-btn {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 34px;
+  padding: 0 24px;
+  height: 58px;
   background: var(--glass-bg);
   border: 1.5px solid var(--glass-border);
-  border-radius: 40px;
-  box-shadow: none;
+  border-radius: 32px;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   color: var(--text-pure);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   outline: none;
+  white-space: nowrap;
 }
 
-.rules-capsule-btn:hover {
+.copy-ip-pill-btn:hover {
   transform: translateY(-3px) scale(1.02);
   background: var(--glass-bg-hover);
-  border-color: rgba(255, 255, 255, 0.75);
-  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.35);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6);
 }
 
-.rules-capsule-btn:active {
+.copy-ip-pill-btn:active {
   transform: translateY(0) scale(0.98);
 }
 
-.music-capsule-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 24px;
-  background: var(--glass-bg);
-  border: 1.5px solid var(--glass-border);
-  border-radius: 40px;
-  box-shadow: none;
-  color: var(--text-sub);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  outline: none;
-}
-
-.music-capsule-btn:hover {
-  background: var(--glass-bg-hover);
-  color: var(--text-pure);
-  transform: translateY(-2px);
-}
-
-.music-capsule-btn.playing {
+.copy-ip-pill-btn.copied {
+  background: rgba(34, 197, 94, 0.35);
   border-color: #22c55e;
   color: #86efac;
+}
+
+.copy-pill-icon {
+  font-size: 16px;
 }
 
 /* ========================================================
@@ -395,7 +422,9 @@ body::before {
   background: var(--glass-bg);
   border: 1.5px solid var(--glass-border);
   border-radius: 36px;
-  box-shadow: none;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   padding: 14px 22px;
   transition: all 0.25s ease;
   position: relative;
@@ -404,9 +433,9 @@ body::before {
 }
 
 .glass-capsule:focus-within {
-  border-color: var(--glass-border-focus);
-  background: rgba(188, 158, 220, 0.52);
-  box-shadow: 0 10px 30px rgba(168, 85, 247, 0.35);
+  border-color: rgba(255, 255, 255, 0.45);
+  background: var(--glass-bg-hover);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6);
 }
 
 .glass-capsule.has-error {
@@ -611,6 +640,9 @@ body::before {
   background: var(--glass-bg);
   border: 1.5px solid var(--glass-border);
   border-radius: 24px;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   padding: 10px;
   display: flex;
   flex-direction: column;
@@ -632,12 +664,13 @@ body::before {
 .style-select-card:hover {
   transform: translateY(-2px);
   background: var(--glass-bg-hover);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .style-select-card:has(input:checked) {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.7), rgba(126, 34, 206, 0.75));
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.8), rgba(107, 33, 168, 0.85));
   border-color: #f3e8ff;
-  box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(147, 51, 234, 0.5);
 }
 
 .style-card-icon {
@@ -663,6 +696,9 @@ body::before {
   background: var(--glass-bg);
   border: 1.5px solid var(--glass-border);
   border-radius: 24px;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   padding: 12px 10px;
   text-align: center;
   font-size: 13px;
@@ -1055,21 +1091,13 @@ button.submit-capsule-btn:disabled,
   .twoblocks-main-layout {
     flex-direction: column;
     padding: 24px 16px;
-    gap: 28px;
+    gap: 32px;
   }
 
   .layout-left {
     position: static;
     max-width: 100%;
     min-height: auto;
-  }
-
-  .admin-cards-grid {
-    justify-content: center;
-  }
-
-  .admin-square-card {
-    min-height: 110px;
   }
 
   .layout-right {
@@ -1084,30 +1112,45 @@ button.submit-capsule-btn:disabled,
 }
 
 @media (max-width: 600px) {
-  .brand-logo-text {
-    font-size: 16px;
+  .brand-logo-card {
+    padding: 12px 20px;
+    border-radius: 24px;
   }
 
-  .admin-cards-grid {
-    gap: 10px;
+  .brand-logo-img {
+    max-height: 48px;
   }
 
-  .admin-square-card {
-    min-height: 96px;
-    padding: 10px 6px;
-    border-radius: 20px;
+  .social-circles-row {
+    gap: 20px;
+    padding-left: 0;
   }
 
-  .admin-card-icon {
-    font-size: 22px;
+  .social-circle-btn {
+    width: 60px;
+    height: 60px;
   }
 
-  .admin-card-title {
-    font-size: 12px;
+  .social-svg-icon {
+    width: 28px;
+    height: 28px;
   }
 
-  .admin-card-desc {
-    display: none;
+  .bottom-actions-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .copy-ip-pill-btn {
+    height: 52px;
+    padding: 0 18px;
+    font-size: 13.5px;
+  }
+
+  .action-circle-btn {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
   }
 
   .monitor-capsule {

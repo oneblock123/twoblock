@@ -333,6 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const heroCount = document.getElementById('heroPlayerCount');
   const heroList = document.getElementById('heroPlayersList');
   const copyIpBtn = document.getElementById('copyIpBtn');
+  const copyIpBtnText = document.getElementById('copyIpBtnText');
 
   function copyServerIp(e) {
     if (e) e.stopPropagation();
@@ -348,6 +349,17 @@ document.addEventListener('DOMContentLoaded', () => {
           label.textContent = oldText;
           if (headerPill) headerPill.classList.remove('copied');
         }, 2000);
+      }
+      if (copyIpBtn) {
+        copyIpBtn.classList.add('copied');
+        if (copyIpBtnText) {
+          const oldBtnText = copyIpBtnText.textContent;
+          copyIpBtnText.textContent = 'Скопировано! ✓';
+          setTimeout(() => {
+            copyIpBtnText.textContent = oldBtnText;
+            copyIpBtn.classList.remove('copied');
+          }, 2000);
+        }
       }
     }).catch(() => {
       prompt('Скопируйте IP сервера вручную:', SERVER_IP);
