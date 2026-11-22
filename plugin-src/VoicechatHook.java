@@ -238,8 +238,7 @@ public class VoicechatHook implements VoicechatPlugin {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 String encoded = URLEncoder.encode(message, "UTF-8");
-                String lang = (voiceType != null && voiceType.equalsIgnoreCase("anime")) ? "ja" : "ru";
-                byte[] mp3Bytes = fetchTtsAudio(encoded, lang);
+                byte[] mp3Bytes = fetchTtsAudio(encoded, "ru");
 
                 if (mp3Bytes == null || mp3Bytes.length == 0) {
                     player.sendMessage(ChatColor.RED + "Не удалось получить аудио (ошибка всех TTS сервисов).");
@@ -272,19 +271,24 @@ public class VoicechatHook implements VoicechatPlugin {
                 }
 
                 VoicechatConnection senderConn = api.getConnectionOf(player.getUniqueId());
+                int selfVol = plugin.getPlayerTtsVolume(player.getUniqueId());
+
                 if (senderConn != null) {
-                    try {
-                        StaticAudioChannel selfChannel = api.createStaticAudioChannel(
-                                channelId,
-                                api.fromServerLevel(player.getWorld()),
-                                senderConn
-                        );
-                        if (selfChannel != null) {
-                            OpusEncoder selfEncoder = api.createEncoder();
-                            AudioPlayer selfAudioPlayer = api.createAudioPlayer(selfChannel, selfEncoder, pcm);
-                            selfAudioPlayer.startPlaying();
-                        }
-                    } catch (Throwable ignored) {}
+                    if (selfVol > 0) {
+                        try {
+                            short[] selfPcm = (selfVol == 100) ? pcm : applyVolume(pcm, selfVol / 100.0f);
+                            StaticAudioChannel selfChannel = api.createStaticAudioChannel(
+                                    channelId,
+                                    api.fromServerLevel(player.getWorld()),
+                                    senderConn
+                            );
+                            if (selfChannel != null) {
+                                OpusEncoder selfEncoder = api.createEncoder();
+                                AudioPlayer selfAudioPlayer = api.createAudioPlayer(selfChannel, selfEncoder, selfPcm);
+                                selfAudioPlayer.startPlaying();
+                            }
+                        } catch (Throwable ignored) {}
+                    }
 
                     if (senderConn.isInGroup()) {
                         Group group = senderConn.getGroup();
@@ -296,6 +300,10 @@ public class VoicechatHook implements VoicechatPlugin {
                                     Group targetGroup = targetConn.getGroup();
                                     if (targetGroup != null && targetGroup.getId().equals(group.getId())) {
                                         try {
+                                            int targetVol = plugin.getPlayerTtsVolume(target.getUniqueId());
+                                            if (targetVol <= 0) continue;
+                                            short[] targetPcm = (targetVol == 100) ? pcm : applyVolume(pcm, targetVol / 100.0f);
+
                                             StaticAudioChannel staticChannel = api.createStaticAudioChannel(
                                                     channelId,
                                                     api.fromServerLevel(target.getWorld()),
@@ -303,7 +311,7 @@ public class VoicechatHook implements VoicechatPlugin {
                                             );
                                             if (staticChannel != null) {
                                                 OpusEncoder staticEncoder = api.createEncoder();
-                                                AudioPlayer staticAudioPlayer = api.createAudioPlayer(staticChannel, staticEncoder, pcm);
+                                                AudioPlayer staticAudioPlayer = api.createAudioPlayer(staticChannel, staticEncoder, targetPcm);
                                                 staticAudioPlayer.startPlaying();
                                             }
                                         } catch (Throwable ignored) {}
@@ -457,20 +465,20 @@ public class VoicechatHook implements VoicechatPlugin {
                 return applyDemonEffect(input);
             case "chipmunk":
                 return applyChipmunkEffect(input);
-            case "robot":
-                return applyRobotEffect(input);
             case "giant":
                 return applyGiantEffect(input);
-            case "radio":
-                return applyRadioEffect(input);
-            case "echo":
-                return applyEchoEffect(input);
+            case "ghost":
+                return applyGhostEffect(input);
+            case "drunk":
+                return applyDrunkEffect(input);
+            case "goblin":
+                return applyGoblinEffect(input);
+            case "announcer":
+                return applyAnnouncerEffect(input);
             case "fast":
                 return applyPitchEffect(input, 1.35);
             case "slow":
                 return applyPitchEffect(input, 0.78);
-            case "anime":
-                return applyPitchEffect(input, 1.12);
             default:
                 return input;
         }
@@ -490,29 +498,42 @@ public class VoicechatHook implements VoicechatPlugin {
                     sound = Sound.ENTITY_BAT_TAKEOFF;
                     pitch = 1.8f;
                     break;
-                case "robot":
-                    sound = Sound.BLOCK_BEACON_ACTIVATE;
-                    pitch = 1.7f;
-                    break;
                 case "giant":
                     sound = Sound.ENTITY_ENDER_DRAGON_GROWL;
                     pitch = 0.5f;
                     break;
-                case "radio":
-                    sound = Sound.BLOCK_NOTE_BLOCK_BELL;
-                    pitch = 2.0f;
+                case "ghost":
+                    sound = Sound.ENTITY_PHANTOM_BITE;
+                    pitch = 1.3f;
                     break;
-                case "echo":
-                    sound = Sound.BLOCK_AMETHYST_BLOCK_CHIME;
-                    pitch = 1.2f;
+                case "drunk":
+                    sound = Sound.ENTITY_WANDERING_TRADER_DRINK_POTION;
+                    pitch = 1.0f;
                     break;
-                case "anime":
-                    sound = Sound.ENTITY_EXPERIENCE_ORB_PICKUP;
-                    pitch = 1.5f;
+                case "goblin":
+                    sound = Sound.ENTITY_EVOKER_CELEBRATE;
+                    pitch = 1.7f;
+                    break;
+                case "announcer":
+                    sound = Sound.BLOCK_NOTE_BLOCK_CHIME;
+                    pitch = 1.8f;
                     break;
             }
         }
         player.playSound(player.getLocation(), sound, 0.4f, pitch);
+    }
+
+    public static short[] applyVolume(short[] input, float volume) {
+        if (input == null || input.length == 0) return input;
+        if (Math.abs(volume - 1.0f) < 0.01f) return input;
+        short[] output = new short[input.length];
+        for (int i = 0; i < input.length; i++) {
+            int val = (int) (input[i] * volume);
+            if (val > 32767) val = 32767;
+            else if (val < -32768) val = -32768;
+            output[i] = (short) val;
+        }
+        return output;
     }
 
     private short[] applyDemonEffect(short[] input) {
@@ -599,16 +620,35 @@ public class VoicechatHook implements VoicechatPlugin {
         }
     }
 
-    private short[] applyRobotEffect(short[] input) {
+    private short[] applyGhostEffect(short[] input) {
         if (input == null || input.length == 0) return input;
         try {
-            short[] output = new short[input.length];
-            double freq = 52.0;
-            double twoPiF = 2.0 * Math.PI * freq / 48000.0;
-            for (int i = 0; i < input.length; i++) {
-                double mod = 0.5 + 0.5 * Math.sin(i * twoPiF);
-                int val = (int) (input[i] * (0.35 + 0.65 * mod));
-                val = (val >> 5) << 5;
+            double pitchFactor = 1.14;
+            int newLength = (int) Math.round(input.length / pitchFactor);
+            short[] pitched = new short[newLength];
+
+            for (int i = 0; i < newLength; i++) {
+                double srcPos = i * pitchFactor;
+                int idx0 = (int) Math.floor(srcPos);
+                int idx1 = Math.min(idx0 + 1, input.length - 1);
+                double frac = srcPos - idx0;
+                pitched[i] = (short) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
+            }
+
+            int delaySamples = (int) (48000 * 0.11);
+            short[] output = new short[newLength + delaySamples];
+            double twoPiF = 2.0 * Math.PI * 6.2 / 48000.0;
+
+            for (int i = 0; i < output.length; i++) {
+                int dry = 0;
+                if (i < newLength) {
+                    double trem = 0.65 + 0.35 * Math.sin(i * twoPiF);
+                    dry = (int) (pitched[i] * trem);
+                }
+                int wet = (i >= delaySamples && (i - delaySamples) < newLength)
+                        ? (int) (pitched[i - delaySamples] * 0.38)
+                        : 0;
+                int val = dry + wet;
                 if (val > 32767) val = 32767;
                 else if (val < -32768) val = -32768;
                 output[i] = (short) val;
@@ -619,7 +659,61 @@ public class VoicechatHook implements VoicechatPlugin {
         }
     }
 
-    private short[] applyRadioEffect(short[] input) {
+    private short[] applyDrunkEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            double twoPiF = 2.0 * Math.PI * 1.3 / 48000.0;
+            int estimatedLen = (int) (input.length * 1.15);
+            short[] temp = new short[estimatedLen + 4800];
+            double srcPos = 0;
+            int outIdx = 0;
+            while (srcPos < input.length - 1 && outIdx < temp.length) {
+                int idx0 = (int) Math.floor(srcPos);
+                int idx1 = Math.min(idx0 + 1, input.length - 1);
+                double frac = srcPos - idx0;
+                temp[outIdx++] = (short) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
+                double currentPitch = 0.90 + 0.16 * Math.sin(outIdx * twoPiF);
+                srcPos += currentPitch;
+            }
+            short[] output = new short[outIdx];
+            System.arraycopy(temp, 0, output, 0, outIdx);
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyGoblinEffect(short[] input) {
+        if (input == null || input.length == 0) return input;
+        try {
+            double pitchFactor = 1.35;
+            int newLength = (int) Math.round(input.length / pitchFactor);
+            short[] output = new short[newLength];
+
+            for (int i = 0; i < newLength; i++) {
+                double srcPos = i * pitchFactor;
+                int idx0 = (int) Math.floor(srcPos);
+                int idx1 = Math.min(idx0 + 1, input.length - 1);
+                double frac = srcPos - idx0;
+                int val = (int) Math.round((1.0 - frac) * input[idx0] + frac * input[idx1]);
+
+                if (val > 10000) {
+                    val = 10000 + (val - 10000) / 2;
+                } else if (val < -10000) {
+                    val = -10000 + (val + 10000) / 2;
+                }
+                val = (int) (val * 1.25);
+                if (val > 32767) val = 32767;
+                else if (val < -32768) val = -32768;
+                output[i] = (short) val;
+            }
+            return output;
+        } catch (Throwable ignored) {
+            return input;
+        }
+    }
+
+    private short[] applyAnnouncerEffect(short[] input) {
         if (input == null || input.length == 0) return input;
         try {
             short[] output = new short[input.length];
@@ -630,36 +724,12 @@ public class VoicechatHook implements VoicechatPlugin {
                 double x = input[i];
                 hpY = 0.94 * (hpY + x - prevX);
                 prevX = x;
-                lpY = lpY + 0.32 * (hpY - lpY);
-                int val = (int) (lpY * 1.8);
-                if (val > 22000) val = 22000;
-                else if (val < -22000) val = -22000;
+                lpY = lpY + 0.35 * (hpY - lpY);
+
+                int val = (int) (lpY * 1.9);
+                if (val > 24000) val = 24000;
+                else if (val < -24000) val = -24000;
                 output[i] = (short) val;
-            }
-            return output;
-        } catch (Throwable ignored) {
-            return input;
-        }
-    }
-
-    private short[] applyEchoEffect(short[] input) {
-        if (input == null || input.length == 0) return input;
-        try {
-            int d1 = (int) (48000 * 0.14);
-            int d2 = (int) (48000 * 0.28);
-            int d3 = (int) (48000 * 0.42);
-            int extra = d3 + 2000;
-            short[] output = new short[input.length + extra];
-
-            for (int i = 0; i < output.length; i++) {
-                int dry = (i < input.length) ? input[i] : 0;
-                int e1 = (i >= d1 && i - d1 < input.length) ? (int) (input[i - d1] * 0.45) : 0;
-                int e2 = (i >= d2 && i - d2 < input.length) ? (int) (input[i - d2] * 0.28) : 0;
-                int e3 = (i >= d3 && i - d3 < input.length) ? (int) (input[i - d3] * 0.15) : 0;
-                int combined = dry + e1 + e2 + e3;
-                if (combined > 32767) combined = 32767;
-                else if (combined < -32768) combined = -32768;
-                output[i] = (short) combined;
             }
             return output;
         } catch (Throwable ignored) {

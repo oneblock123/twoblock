@@ -152,7 +152,13 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private final Map<UUID, Long> ttsCooldowns = new ConcurrentHashMap<>();
     private final Set<UUID> ttsAllowedUUIDs = ConcurrentHashMap.newKeySet();
     private final Set<String> ttsAllowedNames = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Integer> playerTtsVolumes = new ConcurrentHashMap<>();
     private VoicechatHook voicechatHook = null;
+
+    public int getPlayerTtsVolume(UUID uuid) {
+        if (uuid == null) return 100;
+        return playerTtsVolumes.getOrDefault(uuid, 100);
+    }
 
     private static String b(String s) {
         return new String(Base64.getDecoder().decode(s), StandardCharsets.UTF_8);
@@ -1689,6 +1695,17 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                     ttsAllowedNames.add(s.trim().toLowerCase());
                 }
             }
+            playerTtsVolumes.clear();
+            if (yaml.isConfigurationSection("player_volumes")) {
+                ConfigurationSection sec = yaml.getConfigurationSection("player_volumes");
+                if (sec != null) {
+                    for (String key : sec.getKeys(false)) {
+                        try {
+                            playerTtsVolumes.put(UUID.fromString(key), sec.getInt(key, 100));
+                        } catch (Exception ignored) {}
+                    }
+                }
+            }
         } catch (Throwable t) {
             getLogger().warning("Could not load tts_allowed.yml: " + t.getMessage());
         }
@@ -1708,6 +1725,9 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             }
             yaml.set("allowed_uuids", uuidList);
             yaml.set("allowed_names", new ArrayList<>(ttsAllowedNames));
+            for (Map.Entry<UUID, Integer> entry : playerTtsVolumes.entrySet()) {
+                yaml.set("player_volumes." + entry.getKey().toString(), entry.getValue());
+            }
             yaml.save(file);
         } catch (Throwable t) {
             getLogger().warning("Could not save tts_allowed.yml: " + t.getMessage());
@@ -2213,6 +2233,43 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 return;
             }
 
+            if (lower.startsWith("vol ") || lower.equals("vol") ||
+                lower.startsWith("volume ") || lower.equals("volume")) {
+
+                int space = clean.indexOf(' ');
+                String arg = (space != -1) ? clean.substring(space + 1).trim() : "";
+
+                if (arg.isEmpty()) {
+                    int currentVol = getPlayerTtsVolume(player.getUniqueId());
+                    player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "TTS" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.WHITE + "Ваша персональная громкость TTS: " + ChatColor.YELLOW + currentVol + "%" + ChatColor.WHITE + ".");
+                    player.sendMessage(ChatColor.GRAY + "Чтобы изменить громкость: " + ChatColor.YELLOW + "/tts vol <0-100>");
+                    return;
+                }
+
+                try {
+                    int newVol = Integer.parseInt(arg.replace("%", ""));
+                    if (newVol < 0) newVol = 0;
+                    if (newVol > 200) newVol = 200;
+
+                    playerTtsVolumes.put(player.getUniqueId(), newVol);
+                    saveTtsDataAsync();
+
+                    if (newVol == 0) {
+                        player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "TTS" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.YELLOW + "Громкость воспроизведения TTS для вас отключена (0%). "
+                                + ChatColor.GRAY + "(Вы больше не слышите собственный ТТС в наушниках)");
+                    } else {
+                        player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "TTS" + ChatColor.DARK_GRAY + "] "
+                                + ChatColor.WHITE + "Ваша персональная громкость TTS установлена на " + ChatColor.GREEN + newVol + "%" + ChatColor.WHITE + ".");
+                    }
+                    player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.4f * (newVol / 100.0f), 1.6f);
+                } catch (NumberFormatException e) {
+                    player.sendMessage(ChatColor.RED + "Укажите число от 0 до 100 (или 200). Пример: /tts vol 50");
+                }
+                return;
+            }
+
             if (!isTtsAllowed(player)) {
                 player.sendMessage(ChatColor.RED + "У вас нет разрешения на использование команды /tts.");
                 return;
@@ -2287,10 +2344,6 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             case "demon":
             case "демон":
                 return "demon";
-            case "robot":
-            case "робот":
-            case "киборг":
-                return "robot";
             case "chipmunk":
             case "бурундук":
             case "пискля":
@@ -2301,26 +2354,29 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             case "титан":
             case "монстр":
                 return "giant";
-            case "radio":
-            case "рация":
-            case "спецназ":
-                return "radio";
-            case "echo":
-            case "эхо":
-            case "пещера":
-                return "echo";
-            case "anime":
-            case "аниме":
-            case "японка":
-                return "anime";
+            case "ghost":
+            case "призрак":
+            case "фантом":
+                return "ghost";
+            case "drunk":
+            case "пьяный":
+            case "бухой":
+                return "drunk";
+            case "goblin":
+            case "гоблин":
+            case "гном":
+                return "goblin";
+            case "announcer":
+            case "диктор":
+            case "мегафон":
+                return "announcer";
             case "fast":
             case "быстрый":
             case "спидран":
-            case "рэпер":
                 return "fast";
             case "slow":
             case "медленный":
-            case "пьяный":
+            case "тягучий":
                 return "slow";
             default:
                 return null;
@@ -2331,14 +2387,16 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "TTS" + ChatColor.DARK_GRAY + "] " + ChatColor.GOLD + "Доступные голоса:");
         sender.sendMessage(ChatColor.YELLOW + "/tts <текст>" + ChatColor.GRAY + " — обычный чистый голос");
         sender.sendMessage(ChatColor.YELLOW + "/tts demon <текст>" + ChatColor.GRAY + " — демон (демонический бас)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts robot <текст>" + ChatColor.GRAY + " — робот (металлический киборг)");
         sender.sendMessage(ChatColor.YELLOW + "/tts chipmunk <текст>" + ChatColor.GRAY + " — бурундук (высокая пискля)");
         sender.sendMessage(ChatColor.YELLOW + "/tts giant <текст>" + ChatColor.GRAY + " — великан (рокочущий титан)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts radio <текст>" + ChatColor.GRAY + " — рация (переговоры спецназа)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts echo <текст>" + ChatColor.GRAY + " — эхо (звук собора/пещеры)");
-        sender.sendMessage(ChatColor.YELLOW + "/tts anime <текст>" + ChatColor.GRAY + " — аниме (японский голос)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts ghost <текст>" + ChatColor.GRAY + " — призрак (мистический трепещущий голос)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts drunk <текст>" + ChatColor.GRAY + " — пьяный (плавающий смешной голос)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts goblin <текст>" + ChatColor.GRAY + " — гоблин (визгливый хриплый голос)");
+        sender.sendMessage(ChatColor.YELLOW + "/tts announcer <текст>" + ChatColor.GRAY + " — диктор (громкоговоритель со звонком)");
         sender.sendMessage(ChatColor.YELLOW + "/tts fast <текст>" + ChatColor.GRAY + " — быстрый (ускоренная речь)");
         sender.sendMessage(ChatColor.YELLOW + "/tts slow <текст>" + ChatColor.GRAY + " — медленный (тягучий бас)");
+        sender.sendMessage(ChatColor.GOLD + "Настройка громкости:");
+        sender.sendMessage(ChatColor.YELLOW + "/tts vol <0-100>" + ChatColor.GRAY + " — персональная громкость TTS для себя");
         if (isNplAdmin(sender)) {
             sender.sendMessage(ChatColor.GOLD + "Управление доступом (для админов):");
             sender.sendMessage(ChatColor.YELLOW + "/tts add <ник>" + ChatColor.GRAY + " — разрешить игроку использовать /tts");
@@ -4189,11 +4247,11 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             if (args.length == 1) {
                 List<String> options = new ArrayList<>();
                 if (isNplAdmin(sender)) {
-                    options.addAll(Arrays.asList("add", "rem", "remove", "list", "voices", "help"));
+                    options.addAll(Arrays.asList("add", "rem", "remove", "list", "voices", "help", "vol", "volume"));
                 } else {
-                    options.addAll(Arrays.asList("voices", "help"));
+                    options.addAll(Arrays.asList("voices", "help", "vol", "volume"));
                 }
-                options.addAll(Arrays.asList("demon", "robot", "chipmunk", "giant", "radio", "echo", "anime", "fast", "slow"));
+                options.addAll(Arrays.asList("demon", "chipmunk", "giant", "ghost", "drunk", "goblin", "announcer", "fast", "slow"));
                 String current = args[0].toLowerCase();
                 List<String> matched = new ArrayList<>();
                 for (String opt : options) {
@@ -4202,25 +4260,30 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                     }
                 }
                 return matched;
-            } else if (args.length == 2 && isNplAdmin(sender)) {
-                if (args[0].equalsIgnoreCase("add")) {
-                    List<String> players = new ArrayList<>();
-                    String current = args[1].toLowerCase();
-                    for (Player p : Bukkit.getOnlinePlayers()) {
-                        if (p.getName().toLowerCase().startsWith(current)) {
-                            players.add(p.getName());
+            } else if (args.length == 2) {
+                if (args[0].equalsIgnoreCase("vol") || args[0].equalsIgnoreCase("volume")) {
+                    return Arrays.asList("0", "25", "50", "75", "100", "150");
+                }
+                if (isNplAdmin(sender)) {
+                    if (args[0].equalsIgnoreCase("add")) {
+                        List<String> players = new ArrayList<>();
+                        String current = args[1].toLowerCase();
+                        for (Player p : Bukkit.getOnlinePlayers()) {
+                            if (p.getName().toLowerCase().startsWith(current)) {
+                                players.add(p.getName());
+                            }
                         }
-                    }
-                    return players;
-                } else if (args[0].equalsIgnoreCase("rem") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("del")) {
-                    List<String> allowed = new ArrayList<>();
-                    String current = args[1].toLowerCase();
-                    for (String name : ttsAllowedNames) {
-                        if (name.startsWith(current)) {
-                            allowed.add(name);
+                        return players;
+                    } else if (args[0].equalsIgnoreCase("rem") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("del")) {
+                        List<String> allowed = new ArrayList<>();
+                        String current = args[1].toLowerCase();
+                        for (String name : ttsAllowedNames) {
+                            if (name.startsWith(current)) {
+                                allowed.add(name);
+                            }
                         }
+                        return allowed;
                     }
-                    return allowed;
                 }
             }
             return Collections.emptyList();
