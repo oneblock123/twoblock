@@ -149,6 +149,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private final Map<UUID, Long> lastNplWarning = new ConcurrentHashMap<>();
     private final Map<UUID, Long> nplChatCooldownSeconds = new ConcurrentHashMap<>();
     private final Map<UUID, Long> nplLastChatTime = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> lastChatAllowedTime = new ConcurrentHashMap<>();
     private final Map<UUID, Long> ttsCooldowns = new ConcurrentHashMap<>();
     private final Set<UUID> ttsAllowedUUIDs = ConcurrentHashMap.newKeySet();
     private final Set<String> ttsAllowedNames = ConcurrentHashMap.newKeySet();
@@ -234,7 +235,8 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             new NplRuleInfo("ender_pearl", "Бросок эндер-жемчуга", "Телепортация броском жемчуга Края", true),
             new NplRuleInfo("drop_items", "Выбрасывание предметов", "Выбрасывание предметов из инвентаря на землю", false),
             new NplRuleInfo("pickup_items", "Подбор предметов", "Подбор предметов с земли", false),
-            new NplRuleInfo("villager_trade", "Торговля с жителями", "Торговля в деревнях", false)
+            new NplRuleInfo("villager_trade", "Торговля с жителями", "Торговля в деревнях", false),
+            new NplRuleInfo("chat", "Игровой чат", "Отправка сообщений в игровой чат", false)
     );
 
     private final Set<String> processedMessageIds = ConcurrentHashMap.newKeySet();
@@ -252,6 +254,11 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             loadTtsData();
 
             getServer().getPluginManager().registerEvents(this, this);
+            try {
+                Class.forName("io.papermc.paper.event.player.AsyncChatEvent");
+                getServer().getPluginManager().registerEvents(new PaperChatListener(this), this);
+                getLogger().info("Paper modern chat listener registered.");
+            } catch (Throwable ignored) {}
             if (getCommand("twoblockschat") != null) {
                 getCommand("twoblockschat").setExecutor(this);
             }
@@ -348,6 +355,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         lastNplWarning.clear();
         playerNplRules.clear();
         playerNplNames.clear();
+        lastChatAllowedTime.clear();
         ttsCooldowns.clear();
     }
 
@@ -2684,6 +2692,20 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 handleTtsCommand(player, argsStr);
                 return;
             }
+
+            Player player = event.getPlayer();
+            String cleanCmd = lower.startsWith("/") ? lower.substring(1) : lower;
+            int cmdSpace = cleanCmd.indexOf(' ');
+            String baseCmd = (cmdSpace != -1) ? cleanCmd.substring(0, cmdSpace) : cleanCmd;
+
+            if (baseCmd.equals("me") || baseCmd.equals("msg") || baseCmd.equals("tell") ||
+                baseCmd.equals("w") || baseCmd.equals("whisper") || baseCmd.equals("r") ||
+                baseCmd.equals("reply") || baseCmd.equals("say")) {
+                if (checkAndEnforceChatRestriction(player)) {
+                    event.setCancelled(true);
+                    return;
+                }
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -2803,19 +2825,33 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 }
 
                 String timeStr = args[2].trim().toLowerCase();
+                if (timeStr.equals("mute") || timeStr.equals("мут") || timeStr.equals("block") || timeStr.equals("бан") || timeStr.equals("запрет") || timeStr.equals("запретить")) {
+                    playerNplRules.computeIfAbsent(targetInfo.uuid, k -> new ConcurrentHashMap<>()).put("chat", true);
+                    playerNplNames.put(targetInfo.uuid, targetInfo.name);
+                    saveNplDataAsync();
+                    sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
+                            + ChatColor.WHITE + "Чат для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.WHITE + " теперь: " + ChatColor.RED + "[ПОЛНОСТЬЮ ЗАБЛОКИРОВАН (МУТ)]");
+                    sendPlayerNplSettingsMenu(sender, targetInfo, "");
+                    return;
+                }
+
                 long seconds = parseDurationSeconds(timeStr);
                 if (seconds < 0) {
-                    sender.sendMessage(ChatColor.RED + "Неверный формат времени: " + timeStr + ". Используйте секунды, минуты или часы (например: 30s, 3m, 1h, 0).");
+                    sender.sendMessage(ChatColor.RED + "Неверный формат времени: " + timeStr + ". Используйте секунды, минуты, mute или 0 (например: 30s, 3m, 1h, mute, 0).");
                     return;
                 }
 
                 if (seconds == 0) {
                     nplChatCooldownSeconds.remove(targetInfo.uuid);
                     nplLastChatTime.remove(targetInfo.uuid);
+                    Map<String, Boolean> pr = playerNplRules.get(targetInfo.uuid);
+                    if (pr != null) pr.remove("chat");
                     saveNplDataAsync();
                     sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "NPL" + ChatColor.DARK_GRAY + "] "
-                            + ChatColor.GREEN + "Задержка чата для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.GREEN + " полностью снята.");
+                            + ChatColor.GREEN + "Все ограничения и задержка чата для игрока " + ChatColor.GOLD + targetInfo.name + ChatColor.GREEN + " полностью сняты.");
                 } else {
+                    Map<String, Boolean> pr = playerNplRules.get(targetInfo.uuid);
+                    if (pr != null) pr.remove("chat");
                     nplChatCooldownSeconds.put(targetInfo.uuid, seconds);
                     playerNplNames.put(targetInfo.uuid, targetInfo.name);
                     saveNplDataAsync();
@@ -3030,16 +3066,27 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         }
 
         Long cd = nplChatCooldownSeconds.get(target.uuid);
-        String cdDisplay = (cd != null && cd > 0) ? "§e" + formatDurationHuman(cd) : "§aНет";
+        boolean isMuted = isNplRuleForbidden(target.uuid, "chat");
+        String cdDisplay;
+        if (isMuted) {
+            cdDisplay = "§c[МУТ]";
+        } else if (cd != null && cd > 0) {
+            cdDisplay = "§e" + formatDurationHuman(cd);
+        } else {
+            cdDisplay = "§aНет";
+        }
+
         if (sender instanceof Player) {
             Player p = (Player) sender;
-            TextComponent chatLine = new TextComponent("§7Задержка чата: " + cdDisplay + " §8[ ");
+            TextComponent chatLine = new TextComponent("§7Чат: " + cdDisplay + " §8[ ");
             TextComponent set30s = new TextComponent("§b[30s]");
             set30s.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 30s"));
             TextComponent set1m = new TextComponent("§b[1m]");
             set1m.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 1m"));
             TextComponent set5m = new TextComponent("§b[5m]");
             set5m.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 5m"));
+            TextComponent setMute = new TextComponent("§e[Мут]");
+            setMute.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat mute"));
             TextComponent clearCd = new TextComponent("§c[Снять]");
             clearCd.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/npl " + target.name + " chat 0"));
 
@@ -3049,11 +3096,13 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             chatLine.addExtra(new TextComponent(" "));
             chatLine.addExtra(set5m);
             chatLine.addExtra(new TextComponent(" "));
+            chatLine.addExtra(setMute);
+            chatLine.addExtra(new TextComponent(" "));
             chatLine.addExtra(clearCd);
             chatLine.addExtra(new TextComponent(" §8]"));
             p.spigot().sendMessage(chatLine);
         } else {
-            sender.sendMessage("§7Задержка чата: " + cdDisplay + " §8(/npl " + target.name + " chat <время>)");
+            sender.sendMessage("§7Чат: " + cdDisplay + " §8(/npl " + target.name + " chat <время/mute/0>)");
         }
 
         sender.sendMessage(ChatColor.GRAY + "Нажмите на действие, чтобы запретить/разрешить для этого игрока:");
@@ -4296,48 +4345,101 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
-        try {
-            Player player = event.getPlayer();
-            UUID uuid = player.getUniqueId();
+    public boolean checkAndEnforceChatRestriction(Player player) {
+        if (player == null) return false;
+        if (isAuditStaff(player) || isNplAdmin(player)) return false;
 
-            Long cooldownSec = nplChatCooldownSeconds.get(uuid);
-            if (cooldownSec != null && cooldownSec > 0) {
-                long now = System.currentTimeMillis();
-                Long last = nplLastChatTime.get(uuid);
-                long cooldownMs = cooldownSec * 1000L;
+        UUID uuid = player.getUniqueId();
+        long now = System.currentTimeMillis();
 
-                if (last != null && (now - last) < cooldownMs) {
-                    event.setCancelled(true);
+        if (nplPlayers.contains(uuid) && isNplRuleForbidden(uuid, "chat")) {
+            Long lastW = lastNplWarning.get(uuid);
+            if (lastW == null || now - lastW > 1500) {
+                lastNplWarning.put(uuid, now);
+                player.sendMessage(ChatColor.RED + "Вам запрещено писать в чат на испытательном сроке.");
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f);
+            }
+            return true;
+        }
+
+        Long cooldownSec = nplChatCooldownSeconds.get(uuid);
+        if (cooldownSec != null && cooldownSec > 0) {
+            Long lastAllowed = lastChatAllowedTime.get(uuid);
+            if (lastAllowed != null && (now - lastAllowed) < 350) {
+                return false;
+            }
+
+            Long last = nplLastChatTime.get(uuid);
+            long cooldownMs = cooldownSec * 1000L;
+
+            if (last != null && (now - last) < cooldownMs) {
+                Long lastW = lastNplWarning.get(uuid);
+                if (lastW == null || now - lastW > 1000) {
+                    lastNplWarning.put(uuid, now);
                     long leftSec = Math.max(1L, (cooldownMs - (now - last) + 999L) / 1000L);
                     player.sendMessage(ChatColor.RED + "Вам установлена задержка сообщений. Подождите ещё "
                             + ChatColor.YELLOW + formatDurationHuman(leftSec) + ChatColor.RED + " перед следующим сообщением.");
-                    return;
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.7f, 1.0f);
                 }
-                nplLastChatTime.put(uuid, now);
+                return true;
             }
 
-            if (!sendMinecraftChatToSite) return;
+            lastChatAllowedTime.put(uuid, now);
+            nplLastChatTime.put(uuid, now);
+        }
 
-            String playerName = player.getName();
-            String messageText = event.getMessage();
+        return false;
+    }
 
-            if (messageText == null || messageText.trim().isEmpty()) return;
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
+    public void onPlayerChatLowest(AsyncPlayerChatEvent event) {
+        handleLegacyChat(event, true);
+    }
 
-            String cleanText = messageText.trim();
-            if (globalOnly) {
-                if (!cleanText.startsWith("!")) return;
-                cleanText = cleanText.substring(1).trim();
-                if (cleanText.isEmpty()) return;
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onPlayerChatHighest(AsyncPlayerChatEvent event) {
+        handleLegacyChat(event, false);
+    }
+
+    private void handleLegacyChat(AsyncPlayerChatEvent event, boolean isLowest) {
+        try {
+            Player player = event.getPlayer();
+            if (player == null) return;
+
+            if (checkAndEnforceChatRestriction(player)) {
+                event.setCancelled(true);
+                try {
+                    event.getRecipients().clear();
+                } catch (Throwable ignored) {}
+                try {
+                    event.setMessage("");
+                    event.setFormat("");
+                } catch (Throwable ignored) {}
+                return;
             }
 
-            final String textToSend = cleanText;
+            if (event.isCancelled()) return;
 
-            if (isEnabled()) {
-                Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-                    sendChatToSupabase(playerName, textToSend);
-                });
+            if (!isLowest && sendMinecraftChatToSite) {
+                String playerName = player.getName();
+                String messageText = event.getMessage();
+
+                if (messageText == null || messageText.trim().isEmpty()) return;
+
+                String cleanText = messageText.trim();
+                if (globalOnly) {
+                    if (!cleanText.startsWith("!")) return;
+                    cleanText = cleanText.substring(1).trim();
+                    if (cleanText.isEmpty()) return;
+                }
+
+                final String textToSend = cleanText;
+
+                if (isEnabled()) {
+                    Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                        sendChatToSupabase(playerName, textToSend);
+                    });
+                }
             }
         } catch (Throwable ignored) {}
     }
@@ -4552,7 +4654,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
             } else if (args.length == 2) {
                 return Arrays.asList("on", "off", "chat", "reset", "toggle", "info");
             } else if (args.length == 3 && args[1].equalsIgnoreCase("chat")) {
-                return Arrays.asList("30s", "1m", "5m", "10m", "1h", "0");
+                return Arrays.asList("30s", "1m", "5m", "10m", "1h", "mute", "0");
             } else if (args.length == 3 && args[1].equalsIgnoreCase("toggle")) {
                 return Arrays.asList("chat", "place", "break", "craft", "use", "interact", "pvp", "chest", "anvil", "entity_interact", "command");
             }
