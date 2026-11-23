@@ -1,0 +1,10 @@
+name: TwoBlocksAntiXray
+version: 1.0.1
+main: ru.twoblocks.antixray.TwoBlocksAntiXray
+api-version: '1.13'
+author: TwoBlocks
+description: Standalone Anti-Xray Heuristics, Seed Protection and OP Alerts
+commands:
+  antixray:
+    description: Anti-Xray management and miner statistics
+    aliases: [ax, xray]
