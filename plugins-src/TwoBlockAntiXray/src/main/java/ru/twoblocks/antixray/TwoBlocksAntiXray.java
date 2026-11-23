@@ -6,6 +6,7 @@ import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -14,8 +15,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -33,7 +37,7 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         public int debrisCount = 0;
         public int goldCount = 0;
         public int emeraldCount = 0;
-        public int phantomMinedCount = 0;
+        public int phantomClicks = 0;
         public int burstOreCount = 0;
         public long burstStartTime = 0;
         public long lastOreTime = 0;
@@ -53,19 +57,38 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
     private final Map<UUID, Long> lastAlertTime = new ConcurrentHashMap<>();
     private final Set<String> checkedVeins = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    // Фантомные руды (ловушки в глухих стенах)
-    private final Map<String, Material> phantomOres = new ConcurrentHashMap<>();
+    // Фантомные визуальные руды для каждого игрока: UUID -> Set<LocationKey>
+    private final Map<UUID, Set<String>> playerPhantomBlocks = new ConcurrentHashMap<>();
     // Игроки под действием троллинга /ax troll <ник>
     private final Set<UUID> trolledPlayers = ConcurrentHashMap.newKeySet();
 
+    private BlockData diamondOreData;
+    private BlockData deepslateDiamondOreData;
+    private BlockData goldOreData;
+    private BlockData emeraldOreData;
+    private BlockData ancientDebrisData;
+
     @Override
     public void onEnable() {
+        initBlockData();
         getServer().getPluginManager().registerEvents(this, this);
         if (getCommand("antixray") != null) {
             getCommand("antixray").setExecutor(this);
             getCommand("antixray").setTabCompleter(this);
         }
-        getLogger().info("TwoBlocksAntiXray v1.0.1 (Bedrock Shuffler, Honeypot & Troll Screamer) enabled!");
+
+        // Фоновый таск: каждые 2 секунды генерируем облако фантомных руд вокруг копающих игроков ниже Y=30
+        getServer().getScheduler().runTaskTimer(this, this::updatePhantomClouds, 40L, 40L);
+
+        getLogger().info("TwoBlocksAntiXray v1.0.1 (Visual Phantom Ores, Bedrock Shuffler & Troll) enabled!");
+    }
+
+    private void initBlockData() {
+        diamondOreData = Material.DIAMOND_ORE.createBlockData();
+        deepslateDiamondOreData = Material.DEEPSLATE_DIAMOND_ORE.createBlockData();
+        goldOreData = Material.GOLD_ORE.createBlockData();
+        emeraldOreData = Material.EMERALD_ORE.createBlockData();
+        ancientDebrisData = Material.ANCIENT_DEBRIS.createBlockData();
     }
 
     @Override
@@ -73,7 +96,7 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         statsMap.clear();
         checkedVeins.clear();
         lastAlertTime.clear();
-        phantomOres.clear();
+        playerPhantomBlocks.clear();
         trolledPlayers.clear();
         getLogger().info("TwoBlocksAntiXray deactivated.");
     }
@@ -95,28 +118,120 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         lastAlertTime.remove(uuid);
     }
 
+    // ==========================================
+    // 👻 ФАНТОМНЫЕ РУДЫ (VISUAL ORE CLOUDS)
+    // Обычный игрок видит сплошной камень, так как руды замурованы.
+    // Чит с X-Ray просвечивает сквозь камень и видит миллион фейковых алмазов, которые перекрывают весь обзор!
+    // ==========================================
+    private void updatePhantomClouds() {
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (isAdmin(p)) continue;
+
+            Location loc = p.getLocation();
+            World w = loc.getWorld();
+            if (w == null) continue;
+
+            boolean inNether = (w.getEnvironment() == World.Environment.NETHER);
+            if (!inNether && loc.getBlockY() > 32) {
+                // Если игрок на поверхности - не спамим фантомами
+                continue;
+            }
+
+            Set<String> activePhantoms = playerPhantomBlocks.computeIfAbsent(p.getUniqueId(), k -> ConcurrentHashMap.newKeySet());
+            int px = loc.getBlockX();
+            int py = loc.getBlockY();
+            int pz = loc.getBlockZ();
+
+            // Создаем до 15 фантомных руд в радиусе 6-16 блоков в толще камня
+            for (int i = 0; i < 15; i++) {
+                int dx = ThreadLocalRandom.current().nextInt(24) - 12;
+                int dy = ThreadLocalRandom.current().nextInt(16) - 8;
+                int dz = ThreadLocalRandom.current().nextInt(24) - 12;
+
+                int distSq = dx * dx + dy * dy + dz * dz;
+                if (distSq < 25 || distSq > 300) continue; // Не прямо перед носом, а в глубине стен
+
+                int bx = px + dx;
+                int by = py + dy;
+                int bz = pz + dz;
+
+                if (by < w.getMinHeight() + 2 || by > w.getMaxHeight() - 5) continue;
+
+                Block b = w.getBlockAt(bx, by, bz);
+                Material realType = b.getType();
+
+                // Фантомы накладываются ТОЛЬКО на скрытый камень (не соприкасающийся с воздухом)
+                if (isBaseStone(realType) && isSolidSurrounded(b)) {
+                    BlockData fakeData;
+                    if (inNether) {
+                        fakeData = ancientDebrisData;
+                    } else if (by < 0) {
+                        fakeData = (ThreadLocalRandom.current().nextInt(10) < 8) ? deepslateDiamondOreData : emeraldOreData;
+                    } else {
+                        fakeData = (ThreadLocalRandom.current().nextInt(10) < 7) ? diamondOreData : goldOreData;
+                    }
+
+                    p.sendBlockChange(b.getLocation(), fakeData);
+                    activePhantoms.add(bx + ":" + by + ":" + bz);
+                }
+            }
+        }
+    }
+
+    // Если игрок подошел вплотную или пытается кликнуть по фантомному блоку
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onPhantomInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.LEFT_CLICK_BLOCK && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        Block clicked = event.getClickedBlock();
+        if (clicked == null) return;
+
+        Player player = event.getPlayer();
+        Set<String> phantoms = playerPhantomBlocks.get(player.getUniqueId());
+        if (phantoms != null) {
+            String key = clicked.getX() + ":" + clicked.getY() + ":" + clicked.getZ();
+            if (phantoms.contains(key)) {
+                // Игрок попытался ударить фантомный блок, который на самом деле камень!
+                phantoms.remove(key);
+                player.sendBlockChange(clicked.getLocation(), clicked.getBlockData()); // Возвращаем настоящий камень
+
+                MinerStats stats = getStats(player.getUniqueId());
+                stats.phantomClicks++;
+
+                notifyAdmins(ChatColor.DARK_GRAY + "[" + ChatColor.DARK_RED + "" + ChatColor.BOLD + "X-RAY CLICK" + ChatColor.DARK_GRAY + "] "
+                        + ChatColor.YELLOW + player.getName() + ChatColor.GRAY + " кликнул по фантомной руде на "
+                        + ChatColor.AQUA + clicked.getX() + " " + clicked.getY() + " " + clicked.getZ() + ChatColor.RED + " (100% X-Ray в глухой стене!)");
+            }
+        }
+    }
+
+    private boolean isSolidSurrounded(Block b) {
+        BlockFace[] faces = new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP, BlockFace.DOWN};
+        for (BlockFace f : faces) {
+            Material t = b.getRelative(f).getType();
+            if (t.isAir() || t == Material.WATER || t == Material.LAVA) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // 1. Рандомизация узора бедрока (Bedrock Shuffling против SeedCrackerX)
-    // При загрузке чанка слои пола/потолка бедрока слегка перемешиваются, ломая обратный алгоритм реверса сида
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onChunkLoad(ChunkLoadEvent event) {
         Chunk chunk = event.getChunk();
         World world = chunk.getWorld();
         World.Environment env = world.getEnvironment();
 
-        // Обрабатываем Overworld (Y от -63 до -59) и Nether (пол и потолок)
         if (env == World.Environment.NORMAL) {
-            int minY = world.getMinHeight(); // -64
-            // Перемешиваем только переходные слои (-63 .. -60), самый нижний Y=-64 не трогаем, чтобы не падать в пустоту
+            int minY = world.getMinHeight();
             shuffleBedrockLayer(chunk, minY + 1, minY + 4, Material.DEEPSLATE);
         } else if (env == World.Environment.NETHER) {
-            // Пол незера 1..4 и потолок 123..126
             shuffleBedrockLayer(chunk, 1, 4, Material.NETHERRACK);
             shuffleBedrockLayer(chunk, 123, 126, Material.NETHERRACK);
         }
     }
 
     private void shuffleBedrockLayer(Chunk chunk, int fromY, int toY, Material filler) {
-        // Делаем легкую детерминированно-случайную перетасовку 8 блоков в чанке
         int chunkHash = (chunk.getX() * 31 + chunk.getZ()) ^ 0x5DEECE66;
         Random rng = new Random(chunkHash);
 
@@ -150,7 +265,7 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         }
     }
 
-    // 2. Обработка копания блоков: Троллинг, Фантомные руды и Эвристика
+    // 2. Обработка копания блоков: Троллинг и Эвристика
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
@@ -162,28 +277,12 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         // 🎯 Троллинг игрока (/ax troll <ник>)
         if (trolledPlayers.contains(uuid)) {
             event.setCancelled(true);
-
-            // Накладываем эффект Утомления (Mining Fatigue III) на 15 секунд
-            // Это мгновенно вызывает появление огромной призрачной головы Древнего Стража (Elder Guardian) во весь экран!
             player.addPotionEffect(new PotionEffect(getMiningFatigueType(), 300, 2, false, false, true));
-            // Воспроизводим тот самый жуткий звук скримера древнего стража
             player.playSound(player.getLocation(), Sound.ENTITY_ELDER_GUARDIAN_CURSE, 1.2f, 0.9f);
             return;
         }
 
         if (isAdmin(player)) return;
-
-        // 👻 Проверка на добычу фантомной руды-ловушки (Honeypot)
-        if (phantomOres.containsKey(locKey)) {
-            phantomOres.remove(locKey);
-            MinerStats st = getStats(uuid);
-            st.phantomMinedCount++;
-
-            // Читер целенаправленно прокопался прямо в глухую стену к фантомной руде!
-            notifyAdmins(ChatColor.DARK_GRAY + "[" + ChatColor.DARK_RED + "" + ChatColor.BOLD + "BOGUS X-RAY" + ChatColor.DARK_GRAY + "] "
-                    + ChatColor.RED + player.getName() + ChatColor.YELLOW + " вскопал скрытую фантомную руду-приманку на "
-                    + ChatColor.AQUA + loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ() + "!");
-        }
 
         Material mat = block.getType();
         MinerStats stats = getStats(uuid);
@@ -191,11 +290,6 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
 
         if (isBaseStone(mat)) {
             stats.stoneCount++;
-
-            // Каждые 30 выкопанных камней генерируем скрытую фантомную приманку в глухой стене в 3 блоках от туннеля
-            if (stats.stoneCount % 30 == 0 && loc.getY() < 16) {
-                spawnPhantomTrapAround(player, loc);
-            }
             return;
         }
 
@@ -222,38 +316,6 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
 
             checkHeuristicsAndAlert(player, loc, oreType, stats, now);
         }
-    }
-
-    // Генерация скрытой фантомной руды в монолитном камне в 3-4 блоках в стороне
-    private void spawnPhantomTrapAround(Player player, Location origin) {
-        World w = origin.getWorld();
-        if (w == null) return;
-        int dx = (ThreadLocalRandom.current().nextBoolean() ? 1 : -1) * (3 + ThreadLocalRandom.current().nextInt(2));
-        int dz = (ThreadLocalRandom.current().nextBoolean() ? 1 : -1) * (3 + ThreadLocalRandom.current().nextInt(2));
-        int dy = ThreadLocalRandom.current().nextInt(3) - 1;
-
-        Block target = w.getBlockAt(origin.getBlockX() + dx, origin.getBlockY() + dy, origin.getBlockZ() + dz);
-        // Проверяем, что блок полностью окружён сплошным камнем (не соприкасается с воздухом/пещерой)
-        if (isBaseStone(target.getType()) && isSolidSurrounded(target)) {
-            Material oreMat = (target.getY() < 0) ? Material.DEEPSLATE_DIAMOND_ORE : Material.DIAMOND_ORE;
-            if (w.getEnvironment() == World.Environment.NETHER) {
-                oreMat = Material.ANCIENT_DEBRIS;
-            }
-            target.setType(oreMat, false);
-            String k = target.getWorld().getName() + ":" + target.getX() + ":" + target.getY() + ":" + target.getZ();
-            phantomOres.put(k, oreMat);
-        }
-    }
-
-    private boolean isSolidSurrounded(Block b) {
-        BlockFace[] faces = new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP, BlockFace.DOWN};
-        for (BlockFace f : faces) {
-            Material t = b.getRelative(f).getType();
-            if (t.isAir() || t == Material.WATER || t == Material.LAVA) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void checkHeuristicsAndAlert(Player player, Location loc, String oreName, MinerStats stats, long now) {
@@ -415,8 +477,8 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
             sender.sendMessage(ChatColor.RED + "Древние обломки: " + ChatColor.WHITE + s.debrisCount);
             sender.sendMessage(ChatColor.GOLD + "Золото: " + ChatColor.WHITE + s.goldCount);
             sender.sendMessage(ChatColor.GREEN + "Изумруды: " + ChatColor.WHITE + s.emeraldCount);
-            if (s.phantomMinedCount > 0) {
-                sender.sendMessage(ChatColor.DARK_RED + "Вскопано фантомных ловушек: " + ChatColor.RED + "" + ChatColor.BOLD + s.phantomMinedCount + " (100% X-Ray!)");
+            if (s.phantomClicks > 0) {
+                sender.sendMessage(ChatColor.DARK_RED + "Попыток раскопать фантомные руды: " + ChatColor.RED + "" + ChatColor.BOLD + s.phantomClicks + " (100% X-Ray!)");
             }
             sender.sendMessage(ChatColor.GRAY + "Процент ценных руд: " + ratioColor + String.format(Locale.US, "%.2f%%", ratio) + ChatColor.GRAY + " (Норма: 0.5% - 5.0%)");
             return true;
@@ -484,6 +546,14 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         return Collections.emptyList();
     }
 
+    private PotionEffectType getMiningFatigueType() {
+        PotionEffectType type = PotionEffectType.getByName("MINING_FATIGUE");
+        if (type == null) {
+            type = PotionEffectType.getByName("SLOW_DIGGING");
+        }
+        return (type != null) ? type : PotionEffectType.BLINDNESS;
+    }
+
     private boolean isBaseStone(Material mat) {
         String n = mat.name();
         return n.equals("STONE") || n.equals("DEEPSLATE") || n.equals("NETHERRACK") || n.equals("BLACKSTONE")
@@ -491,13 +561,6 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
                 || n.equals("ANDESITE") || n.equals("GRANITE") || n.equals("DIRT") || n.equals("GRAVEL");
     }
 
-        private PotionEffectType getMiningFatigueType() {
-        PotionEffectType type = PotionEffectType.getByName("MINING_FATIGUE");
-        if (type == null) {
-            type = PotionEffectType.getByName("SLOW_DIGGING");
-        }
-        return (type != null) ? type : PotionEffectType.BLINDNESS;
-    }
     private String getValuableOreType(Material mat) {
         String n = mat.name();
         if (n.contains("DIAMOND_ORE")) return "DIAMOND";
