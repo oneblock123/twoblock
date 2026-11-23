@@ -242,7 +242,7 @@ public class VoicechatHook implements VoicechatPlugin {
 
                 // Try Fish Audio neural AI voice clone if API key is set and voice is one of the characters
                 if (!voiceType.equalsIgnoreCase("normal") && !voiceType.equalsIgnoreCase("giant") && !voiceType.equalsIgnoreCase("chipmunk")) {
-                    mp3Bytes = fetchFishAudio(message, voiceType);
+                    mp3Bytes = fetchFishAudio(player, message, voiceType);
                     if (mp3Bytes != null && mp3Bytes.length > 512) {
                         isNeuralAi = true;
                     }
@@ -385,7 +385,7 @@ public class VoicechatHook implements VoicechatPlugin {
         return null;
     }
 
-    private byte[] fetchFishAudio(String text, String voiceType) {
+    private byte[] fetchFishAudio(Player player, String text, String voiceType) {
         String apiKey = plugin.getFishAudioApiKey();
         if (apiKey == null || apiKey.trim().isEmpty()) {
             return null;
@@ -395,6 +395,15 @@ public class VoicechatHook implements VoicechatPlugin {
             return null;
         }
 
+        // Try standard request first, and if 402/insufficient credit try with free tier header model: s2.1-pro-free
+        byte[] res = doFishAudioRequest(apiKey, modelId, text, null);
+        if (res == null) {
+            res = doFishAudioRequest(apiKey, modelId, text, "s2.1-pro-free");
+        }
+        return res;
+    }
+
+    private byte[] doFishAudioRequest(String apiKey, String modelId, String text, String modelHeader) {
         try {
             URL url = new URL("https://api.fish.audio/v1/tts");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -402,6 +411,9 @@ public class VoicechatHook implements VoicechatPlugin {
             conn.setRequestProperty("Authorization", "Bearer " + apiKey.trim());
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 TwoBlocksChat/1.0");
+            if (modelHeader != null && !modelHeader.isEmpty()) {
+                conn.setRequestProperty("model", modelHeader);
+            }
             conn.setConnectTimeout(6000);
             conn.setReadTimeout(12000);
             conn.setDoOutput(true);
@@ -434,12 +446,12 @@ public class VoicechatHook implements VoicechatPlugin {
                         byte[] buf = new byte[1024];
                         int r;
                         while ((r = err.read(buf)) != -1) errOut.write(buf, 0, r);
-                        Bukkit.getLogger().warning("[TwoBlocksChat] Fish Audio HTTP " + code + ": " + errOut.toString(java.nio.charset.StandardCharsets.UTF_8));
+                        Bukkit.getLogger().warning("[TwoBlocksChat] Fish Audio HTTP " + code + (modelHeader != null ? " (" + modelHeader + ")" : "") + ": " + errOut.toString(java.nio.charset.StandardCharsets.UTF_8));
                     }
                 }
             }
         } catch (Throwable t) {
-            Bukkit.getLogger().warning("[TwoBlocksChat] Fish Audio request failed (" + voiceType + "): " + t.getMessage());
+            Bukkit.getLogger().warning("[TwoBlocksChat] Fish Audio request failed: " + t.getMessage());
         }
         return null;
     }
