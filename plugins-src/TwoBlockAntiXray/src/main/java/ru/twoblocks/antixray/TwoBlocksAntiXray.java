@@ -19,7 +19,6 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -37,7 +36,6 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         public int debrisCount = 0;
         public int goldCount = 0;
         public int emeraldCount = 0;
-        public int phantomClicks = 0;
         public int burstOreCount = 0;
         public long burstStartTime = 0;
         public long lastOreTime = 0;
@@ -57,16 +55,13 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
     private final Map<UUID, Long> lastAlertTime = new ConcurrentHashMap<>();
     private final Set<String> checkedVeins = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    // Фантомные визуальные руды для каждого игрока: UUID -> Set<LocationKey>
-    private final Map<UUID, Set<String>> playerPhantomBlocks = new ConcurrentHashMap<>();
     // Игроки под действием троллинга /ax troll <ник>
     private final Set<UUID> trolledPlayers = ConcurrentHashMap.newKeySet();
 
-    private BlockData diamondOreData;
-    private BlockData deepslateDiamondOreData;
-    private BlockData goldOreData;
-    private BlockData emeraldOreData;
-    private BlockData ancientDebrisData;
+    // Разнообразие фейковых руд (для оверворлда и незера)
+    private BlockData[] overworldFakeOres;
+    private BlockData[] deepslateFakeOres;
+    private BlockData[] netherFakeOres;
 
     @Override
     public void onEnable() {
@@ -77,18 +72,41 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
             getCommand("antixray").setTabCompleter(this);
         }
 
-        // Фоновый таск: каждые 2 секунды генерируем облако фантомных руд вокруг копающих игроков ниже Y=30
-        getServer().getScheduler().runTaskTimer(this, this::updatePhantomClouds, 40L, 40L);
+        // Каждую секунду генерируем сплошную плотную стену фейковых руд вокруг игроков в шахтах
+        getServer().getScheduler().runTaskTimer(this, this::updateDenseFakeOreWalls, 20L, 20L);
 
-        getLogger().info("TwoBlocksAntiXray v1.0.1 (Visual Phantom Ores, Bedrock Shuffler & Troll) enabled!");
+        getLogger().info("TwoBlocksAntiXray v1.0.1 (Dense Fake Ore Walls, Bedrock Shuffler & Troll) enabled!");
     }
 
     private void initBlockData() {
-        diamondOreData = Material.DIAMOND_ORE.createBlockData();
-        deepslateDiamondOreData = Material.DEEPSLATE_DIAMOND_ORE.createBlockData();
-        goldOreData = Material.GOLD_ORE.createBlockData();
-        emeraldOreData = Material.EMERALD_ORE.createBlockData();
-        ancientDebrisData = Material.ANCIENT_DEBRIS.createBlockData();
+        overworldFakeOres = new BlockData[]{
+                Material.IRON_ORE.createBlockData(),
+                Material.COPPER_ORE.createBlockData(),
+                Material.COAL_ORE.createBlockData(),
+                Material.GOLD_ORE.createBlockData(),
+                Material.DIAMOND_ORE.createBlockData(),
+                Material.REDSTONE_ORE.createBlockData(),
+                Material.LAPIS_ORE.createBlockData(),
+                Material.EMERALD_ORE.createBlockData()
+        };
+
+        deepslateFakeOres = new BlockData[]{
+                Material.DEEPSLATE_IRON_ORE.createBlockData(),
+                Material.DEEPSLATE_COPPER_ORE.createBlockData(),
+                Material.DEEPSLATE_COAL_ORE.createBlockData(),
+                Material.DEEPSLATE_GOLD_ORE.createBlockData(),
+                Material.DEEPSLATE_DIAMOND_ORE.createBlockData(),
+                Material.DEEPSLATE_REDSTONE_ORE.createBlockData(),
+                Material.DEEPSLATE_LAPIS_ORE.createBlockData(),
+                Material.DEEPSLATE_EMERALD_ORE.createBlockData()
+        };
+
+        netherFakeOres = new BlockData[]{
+                Material.NETHER_QUARTZ_ORE.createBlockData(),
+                Material.NETHER_GOLD_ORE.createBlockData(),
+                Material.ANCIENT_DEBRIS.createBlockData(),
+                Material.GILDED_BLACKSTONE.createBlockData()
+        };
     }
 
     @Override
@@ -96,7 +114,6 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         statsMap.clear();
         checkedVeins.clear();
         lastAlertTime.clear();
-        playerPhantomBlocks.clear();
         trolledPlayers.clear();
         getLogger().info("TwoBlocksAntiXray deactivated.");
     }
@@ -118,12 +135,14 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
         lastAlertTime.remove(uuid);
     }
 
-    // ==========================================
-    // 👻 ФАНТОМНЫЕ РУДЫ (VISUAL ORE CLOUDS)
-    // Обычный игрок видит сплошной камень, так как руды замурованы.
-    // Чит с X-Ray просвечивает сквозь камень и видит миллион фейковых алмазов, которые перекрывают весь обзор!
-    // ==========================================
-    private void updatePhantomClouds() {
+    // ==============================================================
+    // 🧱 ПЛОТНАЯ СТЕНА ФЕЙКОВЫХ РУД (DENSE FAKE ORE WALLS)
+    // Весь скрытый камень за стенами для клиента подменяется пакетами на сплошные руды
+    // (железо, медь, уголь, золото, редстоун, алмазы).
+    // Обычный игрок видит обычный камень (блоки закрыты).
+    // Игрок с X-Ray ресурспаком видит вокруг себя плотную сплошную стену руд, перекрывающую весь обзор!
+    // ==============================================================
+    private void updateDenseFakeOreWalls() {
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (isAdmin(p)) continue;
 
@@ -132,76 +151,60 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
             if (w == null) continue;
 
             boolean inNether = (w.getEnvironment() == World.Environment.NETHER);
-            if (!inNether && loc.getBlockY() > 32) {
-                // Если игрок на поверхности - не спамим фантомами
+            if (!inNether && loc.getBlockY() > 50) {
+                // Если игрок высоко на поверхности - не генерируем
                 continue;
             }
 
-            Set<String> activePhantoms = playerPhantomBlocks.computeIfAbsent(p.getUniqueId(), k -> ConcurrentHashMap.newKeySet());
             int px = loc.getBlockX();
             int py = loc.getBlockY();
             int pz = loc.getBlockZ();
 
-            // Создаем до 15 фантомных руд в радиусе 6-16 блоков в толще камня
-            for (int i = 0; i < 15; i++) {
-                int dx = ThreadLocalRandom.current().nextInt(24) - 12;
-                int dy = ThreadLocalRandom.current().nextInt(16) - 8;
-                int dz = ThreadLocalRandom.current().nextInt(24) - 12;
+            // Радиус плотной обфускации: 12 блоков по горизонтали и 7 по вертикали
+            int radiusXZ = 10;
+            int radiusY = 5;
 
-                int distSq = dx * dx + dy * dy + dz * dz;
-                if (distSq < 25 || distSq > 300) continue; // Не прямо перед носом, а в глубине стен
+            for (int dx = -radiusXZ; dx <= radiusXZ; dx += 2) {
+                for (int dz = -radiusXZ; dz <= radiusXZ; dz += 2) {
+                    for (int dy = -radiusY; dy <= radiusY; dy += 2) {
+                        int bx = px + dx;
+                        int by = py + dy;
+                        int bz = pz + dz;
 
-                int bx = px + dx;
-                int by = py + dy;
-                int bz = pz + dz;
+                        if (by < w.getMinHeight() + 1 || by > w.getMaxHeight() - 5) continue;
 
-                if (by < w.getMinHeight() + 2 || by > w.getMaxHeight() - 5) continue;
+                        Block b = w.getBlockAt(bx, by, bz);
+                        Material realType = b.getType();
 
-                Block b = w.getBlockAt(bx, by, bz);
-                Material realType = b.getType();
+                        // Подменяем ТОЛЬКО скрытые блоки камня за стеной (не видимые глазом напрямую)
+                        if (isBaseStone(realType) && isSolidSurrounded(b)) {
+                            BlockData fakeData;
+                            if (inNether) {
+                                fakeData = netherFakeOres[ThreadLocalRandom.current().nextInt(netherFakeOres.length)];
+                            } else if (by < 0) {
+                                fakeData = deepslateFakeOres[ThreadLocalRandom.current().nextInt(deepslateFakeOres.length)];
+                            } else {
+                                fakeData = overworldFakeOres[ThreadLocalRandom.current().nextInt(overworldFakeOres.length)];
+                            }
 
-                // Фантомы накладываются ТОЛЬКО на скрытый камень (не соприкасающийся с воздухом)
-                if (isBaseStone(realType) && isSolidSurrounded(b)) {
-                    BlockData fakeData;
-                    if (inNether) {
-                        fakeData = ancientDebrisData;
-                    } else if (by < 0) {
-                        fakeData = (ThreadLocalRandom.current().nextInt(10) < 8) ? deepslateDiamondOreData : emeraldOreData;
-                    } else {
-                        fakeData = (ThreadLocalRandom.current().nextInt(10) < 7) ? diamondOreData : goldOreData;
+                            p.sendBlockChange(b.getLocation(), fakeData);
+                        }
                     }
-
-                    p.sendBlockChange(b.getLocation(), fakeData);
-                    activePhantoms.add(bx + ":" + by + ":" + bz);
                 }
             }
         }
     }
 
-    // Если игрок подошел вплотную или пытается кликнуть по фантомному блоку
+    // Если игрок кликает или ломает блок - клиент сразу синхронизирует настоящий блок без алертов
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPhantomInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.LEFT_CLICK_BLOCK && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+    public void onBlockInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.LEFT_CLICK_BLOCK) return;
         Block clicked = event.getClickedBlock();
         if (clicked == null) return;
 
         Player player = event.getPlayer();
-        Set<String> phantoms = playerPhantomBlocks.get(player.getUniqueId());
-        if (phantoms != null) {
-            String key = clicked.getX() + ":" + clicked.getY() + ":" + clicked.getZ();
-            if (phantoms.contains(key)) {
-                // Игрок попытался ударить фантомный блок, который на самом деле камень!
-                phantoms.remove(key);
-                player.sendBlockChange(clicked.getLocation(), clicked.getBlockData()); // Возвращаем настоящий камень
-
-                MinerStats stats = getStats(player.getUniqueId());
-                stats.phantomClicks++;
-
-                notifyAdmins(ChatColor.DARK_GRAY + "[" + ChatColor.DARK_RED + "" + ChatColor.BOLD + "X-RAY CLICK" + ChatColor.DARK_GRAY + "] "
-                        + ChatColor.YELLOW + player.getName() + ChatColor.GRAY + " кликнул по фантомной руде на "
-                        + ChatColor.AQUA + clicked.getX() + " " + clicked.getY() + " " + clicked.getZ() + ChatColor.RED + " (100% X-Ray в глухой стене!)");
-            }
-        }
+        // Просто возвращаем настоящий вид блока клиенту без лишних сообщений
+        player.sendBlockChange(clicked.getLocation(), clicked.getBlockData());
     }
 
     private boolean isSolidSurrounded(Block b) {
@@ -477,9 +480,6 @@ public class TwoBlocksAntiXray extends JavaPlugin implements Listener, CommandEx
             sender.sendMessage(ChatColor.RED + "Древние обломки: " + ChatColor.WHITE + s.debrisCount);
             sender.sendMessage(ChatColor.GOLD + "Золото: " + ChatColor.WHITE + s.goldCount);
             sender.sendMessage(ChatColor.GREEN + "Изумруды: " + ChatColor.WHITE + s.emeraldCount);
-            if (s.phantomClicks > 0) {
-                sender.sendMessage(ChatColor.DARK_RED + "Попыток раскопать фантомные руды: " + ChatColor.RED + "" + ChatColor.BOLD + s.phantomClicks + " (100% X-Ray!)");
-            }
             sender.sendMessage(ChatColor.GRAY + "Процент ценных руд: " + ratioColor + String.format(Locale.US, "%.2f%%", ratio) + ChatColor.GRAY + " (Норма: 0.5% - 5.0%)");
             return true;
         }
