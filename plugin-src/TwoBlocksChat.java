@@ -205,6 +205,11 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private final Set<String> ttsAllowedNames = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Integer> playerTtsVolumes = new ConcurrentHashMap<>();
     private VoicechatHook voicechatHook = null;
+    private AntiXrayManager antiXrayManager = null;
+
+    public AntiXrayManager getAntiXrayManager() {
+        return antiXrayManager;
+    }
     private String fishAudioApiKey = "";
     private final Map<String, String> fishAudioModels = new ConcurrentHashMap<>();
 
@@ -1953,7 +1958,7 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         return true;
     }
 
-    private boolean isNplAdmin(CommandSender sender) {
+    public boolean isNplAdmin(CommandSender sender) {
         if (sender == null) return false;
         if (sender.isOp() || sender.hasPermission("twoblocks.admin") || sender.hasPermission("twoblocks.npl") || sender.hasPermission("*")) {
             return true;
@@ -2749,6 +2754,105 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         sender.sendMessage(ChatColor.YELLOW + "Мемы и реакции: " + ChatColor.WHITE + "bruh, boom, rock, sus, fart, huh, wow, bye, sideeye");
         sender.sendMessage(ChatColor.YELLOW + "Геймерские и культовые: " + ChatColor.WHITE + "csgo, gta, fbi, metalpipe, bonk, error, oof");
         sender.sendMessage(ChatColor.GRAY + "Примеры: " + ChatColor.AQUA + "/s bruh" + ChatColor.GRAY + ", " + ChatColor.AQUA + "/s boom" + ChatColor.GRAY + ", " + ChatColor.AQUA + "/s csgo" + ChatColor.GRAY + ", " + ChatColor.AQUA + "/s metalpipe");
+    }
+    private void handleAntiXrayCommand(CommandSender sender, String[] args) {
+        if (!isNplAdmin(sender)) {
+            sender.sendMessage(ChatColor.RED + "У вас нет прав на использование Anti-Xray мониторинга.");
+            return;
+        }
+
+        if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
+            sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "" + ChatColor.BOLD + "Anti-Xray" + ChatColor.DARK_GRAY + "] " + ChatColor.GOLD + "Управление:");
+            sender.sendMessage(ChatColor.YELLOW + "/ax check <ник>" + ChatColor.GRAY + " — подробная статистика добычи руд игрока");
+            sender.sendMessage(ChatColor.YELLOW + "/ax reset <ник>" + ChatColor.GRAY + " — сбросить счётчики игрока");
+            sender.sendMessage(ChatColor.YELLOW + "/ax top" + ChatColor.GRAY + " — топ игроков с высоким процентом руд");
+            return;
+        }
+
+        String sub = args[0].toLowerCase();
+        if (sub.equals("check") || sub.equals("stats")) {
+            if (args.length < 2) {
+                sender.sendMessage(ChatColor.RED + "Использование: /ax check <ник>");
+                return;
+            }
+            String targetNick = args[1].trim();
+            Player target = Bukkit.getPlayer(targetNick);
+            UUID uuid = (target != null) ? target.getUniqueId() : null;
+            if (uuid == null) {
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    if (p.getName().equalsIgnoreCase(targetNick)) {
+                        uuid = p.getUniqueId();
+                        target = p;
+                        break;
+                    }
+                }
+            }
+
+            if (uuid == null) {
+                sender.sendMessage(ChatColor.RED + "Игрок '" + targetNick + "' не найден в сети.");
+                return;
+            }
+
+            AntiXrayManager.MinerStats s = (antiXrayManager != null) ? antiXrayManager.getStats(uuid) : null;
+            if (s == null) {
+                sender.sendMessage(ChatColor.GRAY + "Нет данных о добыче для " + targetNick);
+                return;
+            }
+
+            double ratio = s.getValuableRatio();
+            ChatColor ratioColor = (ratio > 18.0) ? ChatColor.RED : ((ratio > 10.0) ? ChatColor.GOLD : ChatColor.GREEN);
+
+            sender.sendMessage(ChatColor.DARK_GRAY + "==== " + ChatColor.GOLD + "Шахтёрская статистика: " + ChatColor.YELLOW + targetNick + ChatColor.DARK_GRAY + " ====");
+            sender.sendMessage(ChatColor.GRAY + "Выкопано камня: " + ChatColor.WHITE + s.stoneCount);
+            sender.sendMessage(ChatColor.AQUA + "Алмазы: " + ChatColor.WHITE + s.diamondCount);
+            sender.sendMessage(ChatColor.RED + "Древние обломки: " + ChatColor.WHITE + s.debrisCount);
+            sender.sendMessage(ChatColor.GOLD + "Золото: " + ChatColor.WHITE + s.goldCount);
+            sender.sendMessage(ChatColor.GREEN + "Изумруды: " + ChatColor.WHITE + s.emeraldCount);
+            sender.sendMessage(ChatColor.GRAY + "Процент ценных руд: " + ratioColor + String.format(Locale.US, "%.2f%%", ratio) + ChatColor.GRAY + " (Норма: 0.5% - 5.0%)");
+            return;
+        }
+
+        if (sub.equals("reset")) {
+            if (args.length < 2) {
+                sender.sendMessage(ChatColor.RED + "Использование: /ax reset <ник>");
+                return;
+            }
+            Player target = Bukkit.getPlayer(args[1].trim());
+            if (target != null && antiXrayManager != null) {
+                antiXrayManager.resetStats(target.getUniqueId());
+                sender.sendMessage(ChatColor.GREEN + "Статистика для " + target.getName() + " успешно сброшена.");
+            } else {
+                sender.sendMessage(ChatColor.RED + "Игрок не найден.");
+            }
+            return;
+        }
+
+        if (sub.equals("top")) {
+            if (antiXrayManager == null) return;
+            sender.sendMessage(ChatColor.DARK_GRAY + "==== " + ChatColor.RED + "Подозрительные копатели (Top Ratio)" + ChatColor.DARK_GRAY + " ====");
+            List<Map.Entry<UUID, AntiXrayManager.MinerStats>> list = new ArrayList<>(antiXrayManager.getAllStats().entrySet());
+            list.sort((a, b) -> Double.compare(b.getValue().getValuableRatio(), a.getValue().getValuableRatio()));
+
+            int count = 0;
+            for (Map.Entry<UUID, AntiXrayManager.MinerStats> entry : list) {
+                Player p = Bukkit.getPlayer(entry.getKey());
+                if (p == null) continue;
+                AntiXrayManager.MinerStats st = entry.getValue();
+                int total = st.stoneCount + st.getTotalOres();
+                if (total < 25) continue; // Отсечь тех, кто вскопал пару блоков
+
+                double r = st.getValuableRatio();
+                ChatColor c = (r > 18.0) ? ChatColor.RED : ((r > 10.0) ? ChatColor.GOLD : ChatColor.GREEN);
+                sender.sendMessage(ChatColor.YELLOW + p.getName() + ChatColor.GRAY + " -> " + c + String.format(Locale.US, "%.1f%%", r)
+                        + ChatColor.GRAY + " (Руд: " + st.getTotalOres() + ", Камня: " + st.stoneCount + ")");
+                count++;
+                if (count >= 5) break;
+            }
+            if (count == 0) {
+                sender.sendMessage(ChatColor.GRAY + "Пока нет подозрительных шахтёров.");
+            }
+            return;
+        }
     }
     private void sendTtsAllowedList(CommandSender sender) {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "" + ChatColor.BOLD + "TTS" + ChatColor.DARK_GRAY + "] " + ChatColor.YELLOW + "Игроки с доступом к /tts:");
@@ -4622,6 +4726,10 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 }
                 return true;
             }
+            if (label.equalsIgnoreCase("antixray") || label.equalsIgnoreCase("ax") || label.equalsIgnoreCase("xray")) {
+                handleAntiXrayCommand(sender, args);
+                return true;
+            }
 
             if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
                 if (!sender.isOp() && !sender.hasPermission("twoblocks.admin") && !sender.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
@@ -4688,6 +4796,22 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (alias.equalsIgnoreCase("antixray") || alias.equalsIgnoreCase("ax") || alias.equalsIgnoreCase("xray")) {
+            if (!isNplAdmin(sender)) return Collections.emptyList();
+            if (args.length == 1) {
+                return Arrays.asList("check", "stats", "reset", "top", "help");
+            } else if (args.length == 2 && (args[0].equalsIgnoreCase("check") || args[0].equalsIgnoreCase("reset") || args[0].equalsIgnoreCase("stats"))) {
+                List<String> players = new ArrayList<>();
+                String cur = args[1].toLowerCase();
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    if (p.getName().toLowerCase().startsWith(cur)) {
+                        players.add(p.getName());
+                    }
+                }
+                return players;
+            }
+            return Collections.emptyList();
+        }
         if (alias.equalsIgnoreCase("s") || alias.equalsIgnoreCase("soundpad") || alias.equalsIgnoreCase("snd")) {
             if (!isTtsAllowed(sender)) {
                 return Collections.emptyList();
