@@ -261,7 +261,7 @@ public class VoicechatHook implements VoicechatPlugin {
 
                 short[] pcm = decodeMp3To48kMono(mp3Bytes, api);
                 if (pcm == null || pcm.length == 0) {
-                    player.sendMessage(ChatColor.RED + "Ошибка: не удалось декодировать аудиопоток.");
+                    player.sendMessage(ChatColor.RED + "Ошибка: не удалось декодировать аудипоток.");
                     return;
                 }
 
@@ -270,77 +270,7 @@ public class VoicechatHook implements VoicechatPlugin {
                     pcm = applyVoiceEffect(pcm, voiceType);
                 }
 
-                UUID channelId = player.getUniqueId();
-
-                AudioPlayer old = activeAudioPlayers.remove(channelId);
-                if (old != null && old.isPlaying()) {
-                    try {
-                        old.stopPlaying();
-                    } catch (Throwable ignored) {}
-                }
-
-                EntityAudioChannel entityChannel = api.createEntityAudioChannel(channelId, api.fromEntity(player));
-                if (entityChannel != null) {
-                    OpusEncoder encoder = api.createEncoder();
-                    AudioPlayer audioPlayer = api.createAudioPlayer(entityChannel, encoder, pcm);
-                    activeAudioPlayers.put(channelId, audioPlayer);
-                    audioPlayer.startPlaying();
-                }
-
-                VoicechatConnection senderConn = api.getConnectionOf(player.getUniqueId());
-                int selfVol = plugin.getPlayerTtsVolume(player.getUniqueId());
-
-                if (senderConn != null) {
-                    if (selfVol > 0) {
-                        try {
-                            short[] selfPcm = (selfVol == 100) ? pcm : applyVolume(pcm, selfVol / 100.0f);
-                            StaticAudioChannel selfChannel = api.createStaticAudioChannel(
-                                    channelId,
-                                    api.fromServerLevel(player.getWorld()),
-                                    senderConn
-                            );
-                            if (selfChannel != null) {
-                                OpusEncoder selfEncoder = api.createEncoder();
-                                AudioPlayer selfAudioPlayer = api.createAudioPlayer(selfChannel, selfEncoder, selfPcm);
-                                selfAudioPlayer.startPlaying();
-                            }
-                        } catch (Throwable ignored) {}
-                    }
-
-                    if (senderConn.isInGroup()) {
-                        Group group = senderConn.getGroup();
-                        if (group != null) {
-                            for (Player target : Bukkit.getOnlinePlayers()) {
-                                if (target.equals(player)) continue;
-                                VoicechatConnection targetConn = api.getConnectionOf(target.getUniqueId());
-                                if (targetConn != null && targetConn.isInGroup()) {
-                                    Group targetGroup = targetConn.getGroup();
-                                    if (targetGroup != null && targetGroup.getId().equals(group.getId())) {
-                                        try {
-                                            int targetVol = plugin.getPlayerTtsVolume(target.getUniqueId());
-                                            if (targetVol <= 0) continue;
-                                            short[] targetPcm = (targetVol == 100) ? pcm : applyVolume(pcm, targetVol / 100.0f);
-
-                                            StaticAudioChannel staticChannel = api.createStaticAudioChannel(
-                                                    channelId,
-                                                    api.fromServerLevel(target.getWorld()),
-                                                    targetConn
-                                            );
-                                            if (staticChannel != null) {
-                                                OpusEncoder staticEncoder = api.createEncoder();
-                                                AudioPlayer staticAudioPlayer = api.createAudioPlayer(staticChannel, staticEncoder, targetPcm);
-                                                staticAudioPlayer.startPlaying();
-                                            }
-                                        } catch (Throwable ignored) {}
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    player.sendMessage(ChatColor.YELLOW + "[Предупреждение] Вы не подключены к Voice Chat каналу сервера.");
-                }
-
+                broadcastPcmAudio(player, pcm, api);
                 playFeedbackSound(player, voiceType);
 
             } catch (Throwable t) {
@@ -349,6 +279,124 @@ public class VoicechatHook implements VoicechatPlugin {
         });
     }
 
+    private final Map<String, short[]> soundCache = new ConcurrentHashMap<>();
+
+    public void playSoundpad(Player player, String soundName) {
+        if (player == null || soundName == null) return;
+        VoicechatServerApi api = getServerApi();
+        if (api == null) {
+            player.sendMessage(ChatColor.RED + "Голосовой сервис не активен (" + status + ").");
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                String cleanName = soundName.toLowerCase().trim();
+                short[] pcm = soundCache.get(cleanName);
+
+                if (pcm == null) {
+                    InputStream in = plugin.getResource("sounds/" + cleanName + ".mp3");
+                    if (in == null) {
+                        player.sendMessage(ChatColor.RED + "Звук '" + soundName + "' не найден в саундпаде.");
+                        return;
+                    }
+
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[4096];
+                    int r;
+                    while ((r = in.read(buf)) != -1) {
+                        baos.write(buf, 0, r);
+                    }
+                    in.close();
+                    byte[] mp3Bytes = baos.toByteArray();
+
+                    pcm = decodeMp3To48kMono(mp3Bytes, api);
+                    if (pcm == null || pcm.length == 0) {
+                        player.sendMessage(ChatColor.RED + "Не удалось декодировать звук: " + soundName);
+                        return;
+                    }
+                    soundCache.put(cleanName, pcm);
+                }
+
+                broadcastPcmAudio(player, pcm, api);
+                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.4f, 1.8f);
+
+            } catch (Throwable t) {
+                player.sendMessage(ChatColor.RED + "Ошибка воспроизведения саундпада: " + t.getMessage());
+            }
+        });
+    }
+
+    private void broadcastPcmAudio(Player player, short[] pcm, VoicechatServerApi api) {
+        UUID channelId = player.getUniqueId();
+
+        AudioPlayer old = activeAudioPlayers.remove(channelId);
+        if (old != null && old.isPlaying()) {
+            try {
+                old.stopPlaying();
+            } catch (Throwable ignored) {}
+        }
+
+        EntityAudioChannel entityChannel = api.createEntityAudioChannel(channelId, api.fromEntity(player));
+        if (entityChannel != null) {
+            OpusEncoder encoder = api.createEncoder();
+            AudioPlayer audioPlayer = api.createAudioPlayer(entityChannel, encoder, pcm);
+            activeAudioPlayers.put(channelId, audioPlayer);
+            audioPlayer.startPlaying();
+        }
+
+        VoicechatConnection senderConn = api.getConnectionOf(player.getUniqueId());
+        int selfVol = plugin.getPlayerTtsVolume(player.getUniqueId());
+
+        if (senderConn != null) {
+            if (selfVol > 0) {
+                try {
+                    short[] selfPcm = (selfVol == 100) ? pcm : applyVolume(pcm, selfVol / 100.0f);
+                    StaticAudioChannel selfChannel = api.createStaticAudioChannel(
+                            channelId,
+                            api.fromServerLevel(player.getWorld()),
+                            senderConn
+                    );
+                    if (selfChannel != null) {
+                        OpusEncoder selfEncoder = api.createEncoder();
+                        AudioPlayer selfAudioPlayer = api.createAudioPlayer(selfChannel, selfEncoder, selfPcm);
+                        selfAudioPlayer.startPlaying();
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            if (senderConn.isInGroup()) {
+                Group group = senderConn.getGroup();
+                if (group != null) {
+                    for (Player target : Bukkit.getOnlinePlayers()) {
+                        if (target.equals(player)) continue;
+                        VoicechatConnection targetConn = api.getConnectionOf(target.getUniqueId());
+                        if (targetConn != null && targetConn.isInGroup()) {
+                            Group targetGroup = targetConn.getGroup();
+                            if (targetGroup != null && targetGroup.getId().equals(group.getId())) {
+                                try {
+                                    int targetVol = plugin.getPlayerTtsVolume(target.getUniqueId());
+                                    if (targetVol <= 0) continue;
+                                    short[] targetPcm = (targetVol == 100) ? pcm : applyVolume(pcm, targetVol / 100.0f);
+
+                                    StaticAudioChannel staticChannel = api.createStaticAudioChannel(
+                                            channelId,
+                                            api.fromServerLevel(target.getWorld()),
+                                            targetConn
+                                    );
+                                    if (staticChannel != null) {
+                                        OpusEncoder staticEncoder = api.createEncoder();
+                                        AudioPlayer staticAudioPlayer = api.createAudioPlayer(staticChannel, staticEncoder, targetPcm);
+                                        staticAudioPlayer.startPlaying();
+                                    }
+                                } catch (Throwable ignored) {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     private byte[] fetchTtsAudio(String encodedText, String lang) {
         String tl = (lang != null && !lang.isEmpty()) ? lang : "ru";
         String[] endpoints = new String[]{

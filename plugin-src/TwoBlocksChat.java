@@ -151,6 +151,56 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
     private final Map<UUID, Long> nplLastChatTime = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastChatAllowedTime = new ConcurrentHashMap<>();
     private final Map<UUID, Long> ttsCooldowns = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> soundpadCooldowns = new ConcurrentHashMap<>();
+    private static final Map<String, String> SOUNDPAD_ALIASES = new HashMap<>();
+    static {
+        // Категория 1: Мемы и Реакции
+        SOUNDPAD_ALIASES.put("bruh", "bruh");
+        SOUNDPAD_ALIASES.put("брах", "bruh");
+        SOUNDPAD_ALIASES.put("boom", "boom");
+        SOUNDPAD_ALIASES.put("бум", "boom");
+        SOUNDPAD_ALIASES.put("vineboom", "boom");
+        SOUNDPAD_ALIASES.put("rock", "boom");
+        SOUNDPAD_ALIASES.put("скала", "boom");
+        SOUNDPAD_ALIASES.put("sus", "sus");
+        SOUNDPAD_ALIASES.put("сас", "sus");
+        SOUNDPAD_ALIASES.put("amongus", "sus");
+        SOUNDPAD_ALIASES.put("амонгус", "sus");
+        SOUNDPAD_ALIASES.put("fart", "fart");
+        SOUNDPAD_ALIASES.put("пук", "fart");
+        SOUNDPAD_ALIASES.put("пердеж", "fart");
+        SOUNDPAD_ALIASES.put("huh", "huh");
+        SOUNDPAD_ALIASES.put("хых", "huh");
+        SOUNDPAD_ALIASES.put("а", "huh");
+        SOUNDPAD_ALIASES.put("wow", "wow");
+        SOUNDPAD_ALIASES.put("вау", "wow");
+        SOUNDPAD_ALIASES.put("bye", "bye");
+        SOUNDPAD_ALIASES.put("пока", "bye");
+        SOUNDPAD_ALIASES.put("later", "bye");
+        SOUNDPAD_ALIASES.put("sideeye", "sideeye");
+        SOUNDPAD_ALIASES.put("сайдай", "sideeye");
+
+        // Категория 2: Геймерские и Культовые звуки
+        SOUNDPAD_ALIASES.put("gta", "gta");
+        SOUNDPAD_ALIASES.put("гта", "gta");
+        SOUNDPAD_ALIASES.put("wasted", "gta");
+        SOUNDPAD_ALIASES.put("fbi", "fbi");
+        SOUNDPAD_ALIASES.put("фбр", "fbi");
+        SOUNDPAD_ALIASES.put("metalpipe", "metalpipe");
+        SOUNDPAD_ALIASES.put("pipe", "metalpipe");
+        SOUNDPAD_ALIASES.put("труба", "metalpipe");
+        SOUNDPAD_ALIASES.put("bonk", "bonk");
+        SOUNDPAD_ALIASES.put("бонк", "bonk");
+        SOUNDPAD_ALIASES.put("error", "error");
+        SOUNDPAD_ALIASES.put("ошибка", "error");
+        SOUNDPAD_ALIASES.put("oof", "oof");
+        SOUNDPAD_ALIASES.put("уф", "oof");
+        SOUNDPAD_ALIASES.put("csgo", "csgo");
+        SOUNDPAD_ALIASES.put("ксго", "csgo");
+        SOUNDPAD_ALIASES.put("easypeasy", "csgo");
+        SOUNDPAD_ALIASES.put("изи", "csgo");
+        SOUNDPAD_ALIASES.put("изипизи", "csgo");
+    }
     private final Set<UUID> ttsAllowedUUIDs = ConcurrentHashMap.newKeySet();
     private final Set<String> ttsAllowedNames = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Integer> playerTtsVolumes = new ConcurrentHashMap<>();
@@ -2652,6 +2702,54 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
         }
     }
 
+    private void handleSoundpadCommand(Player player, String arg) {
+        if (!isTtsAllowed(player)) {
+            player.sendMessage(ChatColor.RED + "У вас нет разрешения на использование команды /tts и Саундпада.");
+            return;
+        }
+
+        String soundKey = (arg != null) ? arg.toLowerCase().trim() : "";
+        if (soundKey.isEmpty() || soundKey.equals("help") || soundKey.equals("list")) {
+            sendSoundpadHelp(player);
+            return;
+        }
+
+        String mappedFile = SOUNDPAD_ALIASES.get(soundKey);
+        if (mappedFile == null) {
+            player.sendMessage(ChatColor.RED + "Звук '" + soundKey + "' не найден в саундпаде.");
+            player.sendMessage(ChatColor.GRAY + "Напишите " + ChatColor.YELLOW + "/s" + ChatColor.GRAY + " для списка доступных звуков.");
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Long last = soundpadCooldowns.get(player.getUniqueId());
+        if (last != null && now - last < 3000) {
+            player.sendMessage(ChatColor.RED + "Подождите пару секунд перед следующим звуком.");
+            return;
+        }
+        soundpadCooldowns.put(player.getUniqueId(), now);
+
+        if (voicechatHook == null || !voicechatHook.isReady()) {
+            setupVoicechat();
+        }
+
+        if (voicechatHook == null || !voicechatHook.isReady()) {
+            String detail = (voicechatHook != null) ? voicechatHook.getStatus() : voicechatDebugStatus;
+            player.sendMessage(ChatColor.RED + "Голосовой сервис не активен (" + detail + ").");
+            return;
+        }
+
+        voicechatHook.playSoundpad(player, mappedFile);
+        player.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "Soundpad" + ChatColor.DARK_GRAY + "] "
+                + ChatColor.GREEN + "Воспроизведение: " + ChatColor.YELLOW + soundKey + ChatColor.GRAY + " (" + mappedFile + ")");
+    }
+
+    private void sendSoundpadHelp(CommandSender sender) {
+        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "" + ChatColor.BOLD + "Soundpad" + ChatColor.DARK_GRAY + "] " + ChatColor.GOLD + "Доступные звуки (/s <звук>):");
+        sender.sendMessage(ChatColor.YELLOW + "Мемы и реакции: " + ChatColor.WHITE + "bruh, boom, rock, sus, fart, huh, wow, bye, sideeye");
+        sender.sendMessage(ChatColor.YELLOW + "Геймерские и культовые: " + ChatColor.WHITE + "csgo, gta, fbi, metalpipe, bonk, error, oof");
+        sender.sendMessage(ChatColor.GRAY + "Примеры: " + ChatColor.AQUA + "/s bruh" + ChatColor.GRAY + ", " + ChatColor.AQUA + "/s boom" + ChatColor.GRAY + ", " + ChatColor.AQUA + "/s csgo" + ChatColor.GRAY + ", " + ChatColor.AQUA + "/s metalpipe");
+    }
     private void sendTtsAllowedList(CommandSender sender) {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.AQUA + "" + ChatColor.BOLD + "TTS" + ChatColor.DARK_GRAY + "] " + ChatColor.YELLOW + "Игроки с доступом к /tts:");
         if (ttsAllowedNames.isEmpty() && ttsAllowedUUIDs.isEmpty()) {
@@ -4515,6 +4613,15 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
                 }
                 return true;
             }
+            if (label.equalsIgnoreCase("s") || label.equalsIgnoreCase("soundpad") || label.equalsIgnoreCase("snd")) {
+                if (sender instanceof Player) {
+                    Player p = (Player) sender;
+                    handleSoundpadCommand(p, String.join(" ", args));
+                } else {
+                    sender.sendMessage(ChatColor.RED + "Саундпад доступен только игрокам в игре.");
+                }
+                return true;
+            }
 
             if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
                 if (!sender.isOp() && !sender.hasPermission("twoblocks.admin") && !sender.getName().equalsIgnoreCase(b("R2VuaXVzX1Bvbm9z"))) {
@@ -4581,6 +4688,27 @@ public class TwoBlocksChat extends JavaPlugin implements Listener, CommandExecut
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (alias.equalsIgnoreCase("s") || alias.equalsIgnoreCase("soundpad") || alias.equalsIgnoreCase("snd")) {
+            if (!isTtsAllowed(sender)) {
+                return Collections.emptyList();
+            }
+            if (args.length == 1) {
+                String current = args[0].toLowerCase();
+                List<String> matched = new ArrayList<>();
+                List<String> sounds = Arrays.asList(
+                    "bruh", "boom", "rock", "sus", "fart", "huh", "wow", "bye", "sideeye",
+                    "csgo", "gta", "fbi", "metalpipe", "bonk", "error", "oof",
+                    "брах", "бум", "скала", "сас", "пук", "хых", "вау", "пока", "гта", "фбр", "труба", "бонк", "ошибка", "уф", "изи"
+                );
+                for (String s : sounds) {
+                    if (s.startsWith(current)) {
+                        matched.add(s);
+                    }
+                }
+                return matched;
+            }
+            return Collections.emptyList();
+        }
         if (alias.equalsIgnoreCase("tts") || alias.equalsIgnoreCase("ттс")) {
             if (!isTtsAllowed(sender)) {
                 return Collections.emptyList();

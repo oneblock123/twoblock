@@ -1,4 +1,4 @@
-name: TwoBlocksChat
+﻿name: TwoBlocksChat
 version: 1.0.8
 main: ru.twoblocks.chat.TwoBlocksChat
 api-version: '1.13'
@@ -14,3 +14,6 @@ commands:
   tts:
     description: Text to speech voice broadcast
     aliases: [ttsvoice]
+  s:
+    description: Soundpad meme sound player
+    aliases: [soundpad, snd]
