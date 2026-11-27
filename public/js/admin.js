@@ -122,12 +122,13 @@ document.addEventListener('DOMContentLoaded', () => {
       appsList.innerHTML = `<div class="empty-state-card" style="padding: 40px;"><div style="font-size: 32px; margin-bottom: 8px;">⏳</div><div style="font-weight: 700; color: #fff;">Загрузка базы заявок...</div></div>`;
     }
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
+    const timer = setTimeout(() => controller.abort(), 5000);
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?select=*&order=created_at.desc`, {
         method: 'GET',
         headers: SB_HEADERS,
-        signal: controller.signal
+        signal: controller.signal,
+        cache: 'no-store'
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -137,8 +138,33 @@ document.addEventListener('DOMContentLoaded', () => {
       renderList();
     } catch (err) {
       console.error("Supabase fast load error:", err);
+      // Fallback: try local /api/applications if running via Node server
+      try {
+        const localRes = await fetch('/api/applications', { cache: 'no-store' });
+        if (localRes.ok) {
+          const localJson = await localRes.json();
+          if (localJson && Array.isArray(localJson.applications)) {
+            applications = localJson.applications;
+            saveAppsCache(applications);
+            updateStats();
+            renderList();
+            return;
+          }
+        }
+      } catch (_) {}
       if (!isBackground && applications.length === 0 && appsList) {
-        appsList.innerHTML = `<div class="empty-state-card">Ошибка загрузки базы: ${err.name === 'AbortError' ? 'таймаут 8 сек' : (err.message || err)}</div>`;
+        const reason = err.name === 'AbortError'
+          ? 'Сервер базы не ответил за 5 сек (возможно мешает VPN)'
+          : (err.message || err);
+        appsList.innerHTML = `
+          <div class="empty-state-card" style="padding: 36px;">
+            <div style="font-size: 28px; margin-bottom: 8px;">⚠️</div>
+            <div style="font-weight: 700; color: #fff; margin-bottom: 6px;">Не удалось загрузить заявки</div>
+            <div style="font-size: 13px; color: #fca5a5; margin-bottom: 14px;">${reason}</div>
+            <button type="button" id="retryLoadAppsBtn" class="auth-btn" style="max-width: 220px; margin: 0 auto;">🔄 Повторить</button>
+          </div>`;
+        const retryBtn = document.getElementById('retryLoadAppsBtn');
+        if (retryBtn) retryBtn.addEventListener('click', () => loadApplications(false));
       }
     } finally {
       clearTimeout(timer);
