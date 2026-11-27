@@ -38,11 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let isAuthenticated = sessionStorage.getItem('twoblocks_admin_auth') === 'true' ||
                         localStorage.getItem('twoblocks_admin_auth') === 'true';
 
-  if (isAuthenticated && authOverlay) {
-    authOverlay.classList.add('hidden');
-    startSupabaseListener();
-  }
-
   if (passInput) {
     passInput.addEventListener('input', () => {
       if (authError) authError.classList.remove('visible');
@@ -115,6 +110,11 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('twoblocks_apps_cache', json);
       sessionStorage.setItem('twoblocks_apps_cache', json);
     } catch (e) {}
+  }
+
+  if (isAuthenticated && authOverlay) {
+    authOverlay.classList.add('hidden');
+    startSupabaseListener();
   }
 
   async function loadApplications(isBackground = false) {
