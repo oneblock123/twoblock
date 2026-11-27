@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let searchQuery = '';
   let activeApp = null;
   let listenerStarted = false;
+  let isLoading = false;
+  let realtimeTimer = null;
+  let pollTimer = null;
 
   // ========================================================
   // ADMIN AUTHENTICATION
@@ -114,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {}
   }
 
-  let isLoading = false;
   async function loadApplications(isBackground = false) {
     if (isLoading) return;
     isLoading = true;
@@ -172,8 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  let realtimeTimer = null;
-  let pollTimer = null;
   function startSupabaseListener() {
     if (listenerStarted || !isAuthenticated) return;
     listenerStarted = true;
