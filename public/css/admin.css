@@ -1,11 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 
 :root {
-  --bg-sunset: url('../twoblocks-bg.jpg?v=20261122_winter_4k');
-  --glass-bg: rgba(178, 148, 208, 0.42);
-  --glass-bg-hover: rgba(195, 168, 225, 0.52);
-  --glass-border: rgba(255, 255, 255, 0.38);
-  --glass-shadow: 0 12px 32px rgba(25, 8, 45, 0.3);
+  --bg-sunset: url('../winter-bg.jpg?v=20261127_xmas');
+  --glass-bg: rgba(95, 118, 165, 0.36);
+  --glass-bg-hover: rgba(115, 140, 190, 0.46);
+  --glass-border: rgba(215, 238, 255, 0.36);
+  --glass-shadow: 0 12px 32px rgba(8, 18, 42, 0.36);
 
   --accent-purple: #7c3aed;
   --accent-green: #22c55e;

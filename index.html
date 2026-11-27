@@ -7,10 +7,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./public/css/style.css?v=20261122_winter_4k">
+  <link rel="stylesheet" href="./public/css/style.css?v=20261127_xmas">
   <link rel="icon" href="./public/logo.png">
 </head>
 <body>
+  <div class="xmas-garland" aria-hidden="true">
+    <span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span>
+    <span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span>
+    <span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span>
+    <span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span>
+    <span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span><span class="xmas-bulb"></span>
+  </div>
   <!-- BACKGROUND AUDIO -->
   <audio id="ambientAudio" src="./public/music.mp3" loop autoplay preload="auto"></audio>
 
@@ -106,7 +113,7 @@
 
             <!-- Header Description Pill -->
             <div class="glass-capsule form-title-capsule">
-              <div class="form-title-text">Заявка на сервер Два Блока</div>
+              <div class="form-title-text">❄️ Заявка на сервер Два Блока 🎄</div>
               <div class="form-sub-text">Заполните короткую анкету, чтобы получить доступ к серверу</div>
             </div>
 
@@ -392,6 +399,31 @@
           </div>
         </div>
 
+        <!-- 9. Бан ворды (обязательно кликнуть по каждому) -->
+        <div id="rulesBanwordsSection">
+          <div class="rules-section-title">9. Бан ворды (запрещённые слова Twitch)</div>
+          <div class="rules-item" style="margin-bottom: 10px;">
+            На сервере проходят стримы на Twitch. <strong>Нажмите на каждое слово ниже</strong>, чтобы подтвердить, что вы обязуетесь не использовать их в чате и голосовом чате (иначе заявка не отправится):
+          </div>
+          <div class="banwords-grid" id="banwordsGrid">
+            <button type="button" class="banword-chip" data-bw="pidor">Пидор</button>
+            <button type="button" class="banword-chip" data-bw="pidoras">Пидорас</button>
+            <button type="button" class="banword-chip" data-bw="negr">Негр</button>
+            <button type="button" class="banword-chip" data-bw="gomik">Гомик</button>
+            <button type="button" class="banword-chip" data-bw="daun">Даун</button>
+            <button type="button" class="banword-chip" data-bw="koncha">Конча</button>
+            <button type="button" class="banword-chip" data-bw="simp">Симп</button>
+            <button type="button" class="banword-chip" data-bw="autist">Аутист</button>
+            <button type="button" class="banword-chip" data-bw="nigger">Ниггер</button>
+            <button type="button" class="banword-chip" data-bw="hach">Хач</button>
+            <button type="button" class="banword-chip" data-bw="churka">Чурка</button>
+            <button type="button" class="banword-chip" data-bw="devstvennik">Девственник</button>
+            <button type="button" class="banword-chip" data-bw="shlyuha">Шлюха</button>
+            <button type="button" class="banword-chip" data-bw="kukold">Куколд</button>
+          </div>
+          <div class="banwords-progress" id="banwordsProgress">Отмечено: 0 из 14</div>
+        </div>
+
         <!-- ГЛАВНЫЙ ПРИНЦИП СЕРВЕРА -->
         <div class="rules-principle-card">
           <div class="rules-principle-title">💎 ГЛАВНЫЙ ПРИНЦИП СЕРВЕРА</div>
@@ -408,7 +440,8 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./public/js/app.js?v=20261122_4k_new"></script>
+  <script src="./public/js/snow.js?v=20261127_xmas" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script type="module" src="./public/js/app.js?v=20261127_xmas"></script>
 </body>
 </html>

@@ -1,13 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 
 :root {
-  --bg-sunset: url('../twoblocks-bg.jpg?v=20261122_winter_4k');
-  --glass-bg: rgba(45, 45, 48, 0.72);
-  --glass-bg-hover: rgba(58, 58, 62, 0.82);
-  --glass-bg-active: rgba(35, 35, 38, 0.92);
-  --glass-border: rgba(255, 255, 255, 0.14);
-  --glass-border-focus: #a855f7;
-  --glass-shadow: 0 12px 34px rgba(0, 0, 0, 0.48);
+  --bg-sunset: url('../winter-bg.jpg?v=20261127_xmas');
+  --glass-bg: rgba(32, 38, 52, 0.72);
+  --glass-bg-hover: rgba(46, 54, 72, 0.82);
+  --glass-bg-active: rgba(24, 30, 42, 0.92);
+  --glass-border: rgba(210, 235, 255, 0.24);
+  --glass-border-focus: #60a5fa;
+  --glass-shadow: 0 12px 34px rgba(0, 10, 28, 0.52);
 
   --accent-purple: #9333ea;
   --accent-purple-glow: rgba(147, 51, 234, 0.45);
@@ -44,7 +44,42 @@ body {
 }
 
 body::before {
-  display: none;
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 10%, rgba(120, 200, 255, 0.10) 0%, rgba(12, 18, 34, 0.35) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Новогодняя гирлянда вверху экрана */
+.xmas-garland {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 16px;
+  pointer-events: none;
+  z-index: 5;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  overflow: hidden;
+}
+.xmas-bulb {
+  width: 8px;
+  height: 11px;
+  border-radius: 50% 50% 60% 60%;
+  margin-top: 2px;
+  animation: xmasGlow 2.4s ease-in-out infinite alternate;
+}
+.xmas-bulb:nth-child(4n+1) { background: #ff5f6d; box-shadow: 0 0 10px #ff5f6d; animation-delay: 0s; }
+.xmas-bulb:nth-child(4n+2) { background: #ffd166; box-shadow: 0 0 10px #ffd166; animation-delay: 0.6s; }
+.xmas-bulb:nth-child(4n+3) { background: #4ade80; box-shadow: 0 0 10px #4ade80; animation-delay: 1.2s; }
+.xmas-bulb:nth-child(4n+4) { background: #38bdf8; box-shadow: 0 0 10px #38bdf8; animation-delay: 1.8s; }
+@keyframes xmasGlow {
+  0% { opacity: 0.45; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1.1); }
 }
 
 /* MAIN TWO-COLUMN SPLIT CONTAINER */
@@ -1158,4 +1193,49 @@ button.submit-capsule-btn:disabled,
     align-items: flex-start;
     gap: 8px;
   }
+}
+
+/* Бан-ворды в правилах */
+.banwords-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.banword-chip {
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
+  font-family: var(--font-main);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.banword-chip:hover {
+  background: rgba(239, 68, 68, 0.28);
+  transform: translateY(-1px);
+}
+.banword-chip.checked {
+  border-color: rgba(34, 197, 94, 0.7);
+  background: rgba(34, 197, 94, 0.22);
+  color: #bbf7d0;
+}
+.banword-chip.checked::before {
+  content: '✓ ';
+  font-weight: 800;
+}
+.banwords-progress {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fca5a5;
+}
+.banwords-progress.done {
+  color: #86efac;
+}
+.rules-modal-btn-close.ready {
+  background: linear-gradient(135deg, #16a34a, #22c55e) !important;
+  color: #fff !important;
 }

@@ -1,6 +1,14 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase-config.js";
 
-const client = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+function getClient() {
+  return window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+}
+
+const SB_HEADERS = {
+  'apikey': SUPABASE_ANON_KEY,
+  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+  'Content-Type': 'application/json'
+};
 
 document.addEventListener('DOMContentLoaded', () => {
   let applications = [];
@@ -88,9 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalCopySwlBtn = document.getElementById('modalCopySwlBtn');
   const deleteAppBtn = document.getElementById('deleteAppBtn');
 
-  // Try fast session cache immediately for 0ms initial load
+  // Try fast local cache immediately for 0ms initial load
   try {
-    const cached = sessionStorage.getItem('twoblocks_apps_cache');
+    const cached = localStorage.getItem('twoblocks_apps_cache') || sessionStorage.getItem('twoblocks_apps_cache');
     if (cached) {
       applications = JSON.parse(cached);
       updateStats();
@@ -98,63 +106,77 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch (e) {}
 
+  function saveAppsCache(list) {
+    try {
+      const json = JSON.stringify(list);
+      localStorage.setItem('twoblocks_apps_cache', json);
+      sessionStorage.setItem('twoblocks_apps_cache', json);
+    } catch (e) {}
+  }
+
   let isLoading = false;
   async function loadApplications(isBackground = false) {
-    if (!client || isLoading) return;
+    if (isLoading) return;
     isLoading = true;
     if (!isBackground && applications.length === 0 && appsList) {
       appsList.innerHTML = `<div class="empty-state-card" style="padding: 40px;"><div style="font-size: 32px; margin-bottom: 8px;">⏳</div><div style="font-weight: 700; color: #fff;">Загрузка базы заявок...</div></div>`;
     }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
     try {
-      const { data, error } = await client
-        .from('applications')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      applications = data || [];
-      try {
-        sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications));
-      } catch (e) {}
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?select=*&order=created_at.desc`, {
+        method: 'GET',
+        headers: SB_HEADERS,
+        signal: controller.signal
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      applications = Array.isArray(data) ? data : [];
+      saveAppsCache(applications);
       updateStats();
       renderList();
     } catch (err) {
-      console.error("Supabase load error:", err);
+      console.error("Supabase fast load error:", err);
       if (!isBackground && applications.length === 0 && appsList) {
-        appsList.innerHTML = `<div class="empty-state-card">Ошибка загрузки базы: ${err.message || err}</div>`;
+        appsList.innerHTML = `<div class="empty-state-card">Ошибка загрузки базы: ${err.name === 'AbortError' ? 'таймаут 8 сек' : (err.message || err)}</div>`;
       }
     } finally {
+      clearTimeout(timer);
       isLoading = false;
     }
   }
 
   let realtimeTimer = null;
+  let pollTimer = null;
   function startSupabaseListener() {
-    if (listenerStarted || !isAuthenticated || !client) return;
+    if (listenerStarted || !isAuthenticated) return;
     listenerStarted = true;
 
     loadApplications();
 
-    client
-      .channel('admin_applications_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, (payload) => {
-        // Fast instant handling for new incoming application
-        if (payload.eventType === 'INSERT' && payload.new) {
-          if (!applications.some(a => a.id === payload.new.id)) {
-            applications.unshift(payload.new);
-            try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
-            updateStats();
-            renderList();
+    const client = getClient();
+    if (client) {
+      client
+        .channel('admin_applications_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            if (!applications.some(a => a.id === payload.new.id)) {
+              applications.unshift(payload.new);
+              saveAppsCache(applications);
+              updateStats();
+              renderList();
+            }
+            return;
           }
-          return;
-        }
-        // Debounce other events quietly in background without freezing
-        clearTimeout(realtimeTimer);
-        realtimeTimer = setTimeout(() => {
-          loadApplications(true);
-        }, 1500);
-      })
-      .subscribe();
+          clearTimeout(realtimeTimer);
+          realtimeTimer = setTimeout(() => {
+            loadApplications(true);
+          }, 1500);
+        })
+        .subscribe();
+    } else if (!pollTimer) {
+      pollTimer = setInterval(() => loadApplications(true), 15000);
+    }
   }
 
   function updateStats() {
@@ -377,13 +399,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function approveApp(id) {
-    if (!client) return;
     const idx = applications.findIndex(a => a.id === id);
     if (idx === -1) return;
 
     const oldStatus = applications[idx].status;
     applications[idx].status = 'approved';
-    try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+    saveAppsCache(applications);
 
     // Instant UI update in 0ms!
     updateStats();
@@ -395,17 +416,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const { error } = await client
-        .from('applications')
-        .update({ status: 'approved' })
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: SB_HEADERS,
+        body: JSON.stringify({ status: 'approved' })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (err) {
       console.error(err);
-      // Revert if error
       applications[idx].status = oldStatus;
-      try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+      saveAppsCache(applications);
       updateStats();
       renderList();
       alert('Ошибка при принятии заявки: ' + (err.message || err));
@@ -413,13 +433,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function deleteApp(id) {
-    if (!client) return;
     const idx = applications.findIndex(a => a.id === id);
     if (idx === -1) return;
 
     const removedApp = applications[idx];
     applications.splice(idx, 1);
-    try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+    saveAppsCache(applications);
 
     if (activeApp && activeApp.id === id) {
       if (detailModal) detailModal.classList.remove('active');
@@ -431,16 +450,15 @@ document.addEventListener('DOMContentLoaded', () => {
     renderList();
 
     try {
-      const { error } = await client
-        .from('applications')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?id=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: SB_HEADERS
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (err) {
       console.error(err);
       applications.splice(idx, 0, removedApp);
-      try { sessionStorage.setItem('twoblocks_apps_cache', JSON.stringify(applications)); } catch (e) {}
+      saveAppsCache(applications);
       updateStats();
       renderList();
       alert('Ошибка при удалении заявки: ' + (err.message || err));

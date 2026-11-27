@@ -199,6 +199,79 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ========================================================
+  // 9. БАН ВОРДЫ В ПРАВИЛАХ (ОБЯЗАТЕЛЬНО ТЫКНУТЬ ПО КАЖДОМУ)
+  // ========================================================
+  const banwordChips = Array.from(document.querySelectorAll('.banword-chip'));
+  const banwordsProgress = document.getElementById('banwordsProgress');
+  const rulesBanwordsSection = document.getElementById('rulesBanwordsSection');
+  let checkedBanwords = new Set();
+  try {
+    const saved = JSON.parse(localStorage.getItem('twoblocks_banwords_checked') || '[]');
+    if (Array.isArray(saved)) checkedBanwords = new Set(saved);
+  } catch (e) {}
+
+  function areAllBanwordsChecked() {
+    return banwordChips.length > 0 && banwordChips.every(c => checkedBanwords.has(c.getAttribute('data-bw')));
+  }
+
+  function updateBanwordsUI() {
+    let count = 0;
+    for (const chip of banwordChips) {
+      const key = chip.getAttribute('data-bw');
+      if (checkedBanwords.has(key)) {
+        chip.classList.add('checked');
+        count++;
+      } else {
+        chip.classList.remove('checked');
+      }
+    }
+    const allDone = count === banwordChips.length && banwordChips.length > 0;
+    if (banwordsProgress) {
+      banwordsProgress.textContent = allDone
+        ? `✓ Все ${banwordChips.length} бан-вордов подтверждены!`
+        : `Отмечено: ${count} из ${banwordChips.length} (нажмите на каждое слово)`;
+      banwordsProgress.classList.toggle('done', allDone);
+    }
+    if (closeRulesBtnBottom) {
+      if (allDone) {
+        closeRulesBtnBottom.textContent = '✓ Принять правила и закрыть';
+        closeRulesBtnBottom.classList.add('ready');
+      } else {
+        closeRulesBtnBottom.textContent = `Отметьте все бан-ворды (${count}/${banwordChips.length})`;
+        closeRulesBtnBottom.classList.remove('ready');
+      }
+    }
+  }
+
+  banwordChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const key = chip.getAttribute('data-bw');
+      checkedBanwords.add(key);
+      try { localStorage.setItem('twoblocks_banwords_checked', JSON.stringify(Array.from(checkedBanwords))); } catch (e) {}
+      updateBanwordsUI();
+    });
+  });
+  updateBanwordsUI();
+
+  function openBanwordsPrompt() {
+    if (rulesModal) rulesModal.classList.add('active');
+    if (rulesBanwordsSection) {
+      setTimeout(() => rulesBanwordsSection.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
+    }
+  }
+
+  const rulesCheckBox = document.getElementById('rulesAgreed');
+  if (rulesCheckBox) {
+    rulesCheckBox.addEventListener('change', () => {
+      if (rulesCheckBox.checked && !areAllBanwordsChecked()) {
+        rulesCheckBox.checked = false;
+        alert('Откройте правила и нажмите на каждый бан-ворд в разделе 9, иначе анкета не отправится!');
+        openBanwordsPrompt();
+      }
+    });
+  }
+
   // Rules Modal Handlers
   if (openRulesBtn && rulesModal) {
     openRulesBtn.addEventListener('click', (e) => {
@@ -215,6 +288,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (closeRulesBtnBottom && rulesModal) {
     closeRulesBtnBottom.addEventListener('click', () => {
+      if (!areAllBanwordsChecked()) {
+        if (rulesBanwordsSection) rulesBanwordsSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alert('Нажмите на каждый бан-ворд в списке выше, чтобы продолжить!');
+        return;
+      }
+      if (rulesCheckBox) rulesCheckBox.checked = true;
       rulesModal.classList.remove('active');
     });
   }
@@ -262,7 +341,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!document.getElementById('communityImportance').value.trim()) flagError('row-community');
 
       const rulesCheck = document.getElementById('rulesAgreed');
-      if (!rulesCheck || !rulesCheck.checked) {
+      if (!areAllBanwordsChecked()) {
+        alert('Необходимо открыть правила (раздел 9 «Бан ворды») и нажать на каждое запрещённое слово!');
+        openBanwordsPrompt();
+        const rowRules = document.getElementById('row-rules');
+        if (rowRules) rowRules.classList.add('has-error');
+        if (!firstErrorElem) firstErrorElem = rowRules;
+        hasErrors = true;
+      } else if (!rulesCheck || !rulesCheck.checked) {
         alert('Для подачи заявки необходимо прочитать правила сервера и поставить галочку согласия!');
         const rowRules = document.getElementById('row-rules');
         if (rowRules) rowRules.classList.add('has-error');
